@@ -1,12 +1,11 @@
 use winit::{
     event::*,
     event_loop::{ControlFlow, EventLoop},
-    window::{WindowBuilder, Window},
+    window::{Window, WindowBuilder},
 };
 
-#[cfg(target_arch="wasm32")]
+#[cfg(target_arch = "wasm32")]
 use wasm_bindgen::prelude::*;
-
 
 struct State {
     surface: wgpu::Surface,
@@ -22,28 +21,30 @@ impl State {
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
         // NOTE: could be none, see: https://sotrh.github.io/learn-wgpu/beginner/tutorial2-surface/#state-new
-        let adapter = instance.request_adapter(
-            &wgpu::RequestAdapterOptions {
+        let adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::default(),
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
-            },
-        ).await.unwrap();
+            })
+            .await
+            .unwrap();
 
-        let (device, queue) = adapter.request_device(
-            &wgpu::DeviceDescriptor {
-                features: wgpu::Features::empty(),
-                limits:
-                    if cfg!(target_arch = "wasm32") {
+        let (device, queue) = adapter
+            .request_device(
+                &wgpu::DeviceDescriptor {
+                    features: wgpu::Features::empty(),
+                    limits: if cfg!(target_arch = "wasm32") {
                         wgpu::Limits::downlevel_webgl2_defaults()
-                    }
-                    else {
+                    } else {
                         wgpu::Limits::default()
                     },
-                label: None,
-            },
-            None
-        ).await.unwrap();
+                    label: None,
+                },
+                None,
+            )
+            .await
+            .unwrap();
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
@@ -75,12 +76,7 @@ impl State {
     }
 }
 
-
-
-
-
-
-#[cfg_attr(target_arch="wasm32", wasm_bindgen(start))]
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
     cfg_if::cfg_if! {
         if #[cfg(target_arch = "wasm32")] {
@@ -94,7 +90,7 @@ pub async fn run() {
     let event_loop = EventLoop::new();
     let window = WindowBuilder::new().build(&event_loop).unwrap();
 
-    #[cfg(target_arch="wasm32")]
+    #[cfg(target_arch = "wasm32")]
     {
         use winit::dpi::PhysicalSize;
         window.set_inner_size(PhysicalSize::new(450, 450));
@@ -118,7 +114,8 @@ pub async fn run() {
             ref event,
             window_id,
         } if window_id == window.id() => match event {
-            WindowEvent::CloseRequested | WindowEvent::KeyboardInput {
+            WindowEvent::CloseRequested
+            | WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
                         state: ElementState::Pressed,
@@ -127,8 +124,8 @@ pub async fn run() {
                     },
                 ..
             } => *control_flow = ControlFlow::Exit,
-            _ => {},
+            _ => {}
         },
-        _ => {},
+        _ => {}
     });
 }
