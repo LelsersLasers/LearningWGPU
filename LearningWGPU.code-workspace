@@ -1,0 +1,18 @@
+{
+    "folders": [
+		{
+			"path": "."
+		}
+	],
+    "settings": {
+        "files.associations": {
+            "time.h": "c",
+            "iostream": "cpp",
+            "vector": "cpp",
+            "random": "cpp",
+            "xstring": "cpp",
+            "thread": "cpp"
+        },
+        "compile-hero.disable-compile-files-on-did-save-code": true
+    }
+}
