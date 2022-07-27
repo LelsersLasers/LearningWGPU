@@ -1,1 +1,1 @@
-C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\target\debug\libhello_triangle.rlib: C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\src\lib.rs C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\src\shader.wgsl
+C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\target\debug\libhello_triangle.rlib: C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\src\challenge.wgsl C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\src\lib.rs C:\Users\milla\Desktop\coding\LearningWGPU\hello_triangle\src\shader.wgsl

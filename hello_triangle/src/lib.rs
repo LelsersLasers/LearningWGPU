@@ -16,6 +16,8 @@ struct State {
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
+    challenge_pipeline: wgpu::RenderPipeline,
+    use_main_shader: bool
 }
 impl State {
     async fn new(window: &Window) -> Self {
@@ -102,12 +104,52 @@ impl State {
             multiview: None,
         });
 
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("challenge.wgsl").into()),
+        });
+        let challenge_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader,
+                entry_point: "vs_main",
+                buffers: &[],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
+
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
             b: 0.3,
             a: 1.0,
         };
+        let use_main_shader = true;
         Self {
             surface,
             device,
@@ -116,6 +158,8 @@ impl State {
             size,
             clear_color,
             render_pipeline,
+            challenge_pipeline,
+            use_main_shader,
         }
     }
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -135,7 +179,16 @@ impl State {
                     b: 1. - (position.x / self.size.width as f64),
                     a: 1.0,
                 };
-            }
+            },
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(VirtualKeyCode::Space),
+                        ..
+                    },
+                    ..
+            } => self.use_main_shader = !self.use_main_shader,
             _ => {}
         }
         false
@@ -165,8 +218,13 @@ impl State {
                 })],
                 depth_stencil_attachment: None,
             });
-
-            render_pass.set_pipeline(&self.render_pipeline);
+            if self.use_main_shader {
+                render_pass.set_pipeline(&self.render_pipeline);
+            }
+            else {
+                render_pass.set_pipeline(&self.challenge_pipeline);
+            }
+            println!("{}", self.use_main_shader);
             render_pass.draw(0..3, 0..1);
         }
 
