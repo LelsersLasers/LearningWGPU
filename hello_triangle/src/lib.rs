@@ -183,12 +183,12 @@ impl State {
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
-                        state: ElementState::Pressed,
+                        state,
                         virtual_keycode: Some(VirtualKeyCode::Space),
                         ..
                     },
                     ..
-            } => self.use_main_shader = !self.use_main_shader,
+            } => self.use_main_shader = *state != ElementState::Pressed,
             _ => {}
         }
         false
@@ -224,7 +224,6 @@ impl State {
             else {
                 render_pass.set_pipeline(&self.challenge_pipeline);
             }
-            println!("{}", self.use_main_shader);
             render_pass.draw(0..3, 0..1);
         }
 
