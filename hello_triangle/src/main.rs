@@ -3,7 +3,7 @@ use hello_triangle::run;
 fn main() {
     println!("Starting...");
 
-    run();
+    pollster::block_on(run());
 
     println!("Exiting...");
 }

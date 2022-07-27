@@ -8,3 +8,9 @@ I think I will mainly use these guides:
 Docs:
 - https://docs.rs/wgpu/latest/wgpu/
 - https://github.com/gfx-rs/wgpu-rs
+
+
+
+## NOTES
+
+Build WASM: <code>wasm-pack build --target web</code>
