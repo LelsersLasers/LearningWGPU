@@ -61,27 +61,28 @@ const VERTICES: &[Vertex] = &[
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
 const VERTICES_CHAL: &[Vertex] = &[
-    Vertex { // A - top left
+    Vertex {
+        // A - top left
         position: [-0.5, 0.5, 0.0],
         color: [1.0, 0.0, 0.0],
     },
-    Vertex { // B - bottom left
+    Vertex {
+        // B - bottom left
         position: [-0.5, -0.5, 0.0],
         color: [0.0, 1.0, 0.0],
     },
-    Vertex { // C - bottom right
+    Vertex {
+        // C - bottom right
         position: [0.5, -0.5, 0.0],
         color: [0.0, 0.0, 1.0],
     },
-    Vertex { // D - top right
+    Vertex {
+        // D - top right
         position: [0.5, 0.5, 0.0],
         color: [1.0, 1.0, 1.0],
     },
 ];
-const INDICES_CHAL: &[u16] = &[
-    0, 1, 2,
-    0, 2, 3,
-];
+const INDICES_CHAL: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 struct State {
     surface: wgpu::Surface,
@@ -89,6 +90,7 @@ struct State {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
+
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
@@ -190,11 +192,11 @@ impl State {
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Shader"),
+            label: Some("Challenge Shader"),
             source: wgpu::ShaderSource::Wgsl(include_str!("challenge.wgsl").into()),
         });
         let render_pipeline_chal = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Render Pipeline"),
+            label: Some("Challenge Render Pipeline"),
             layout: Some(&render_pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
@@ -241,12 +243,12 @@ impl State {
         let num_indices = INDICES.len() as u32;
 
         let vertex_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
+            label: Some("Challenge Vertex Buffer"),
             contents: bytemuck::cast_slice(VERTICES_CHAL),
             usage: wgpu::BufferUsages::VERTEX,
         });
         let index_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
+            label: Some("Challenge Index Buffer"),
             contents: bytemuck::cast_slice(INDICES_CHAL),
             usage: wgpu::BufferUsages::INDEX,
         });
@@ -337,12 +339,14 @@ impl State {
             if self.space_down {
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass
+                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
             } else {
                 render_pass.set_pipeline(&self.render_pipeline_chal);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
-                render_pass.set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass
+                    .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..1);
             }
         }
