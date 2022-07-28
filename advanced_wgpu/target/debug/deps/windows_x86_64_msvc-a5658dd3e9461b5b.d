@@ -1,0 +1,5 @@
+C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\debug\deps\windows_x86_64_msvc-a5658dd3e9461b5b.rmeta: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\windows_x86_64_msvc-0.36.1\src\lib.rs
+
+C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\debug\deps\windows_x86_64_msvc-a5658dd3e9461b5b.d: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\windows_x86_64_msvc-0.36.1\src\lib.rs
+
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\windows_x86_64_msvc-0.36.1\src\lib.rs:

@@ -31,27 +31,34 @@ impl Vertex {
                     shader_location: 1,
                     format: wgpu::VertexFormat::Float32x3,
                 },
-            ]
+            ],
         }
     }
 }
 
-
-
-
 const VERTICES: &[Vertex] = &[
-    Vertex { position: [-0.0868241, 0.49240386, 0.0], color: [0.5, 0.0, 0.5] }, // A
-    Vertex { position: [-0.49513406, 0.06958647, 0.0], color: [0.5, 0.0, 0.5] }, // B
-    Vertex { position: [-0.21918549, -0.44939706, 0.0], color: [0.5, 0.0, 0.5] }, // C
-    Vertex { position: [0.35966998, -0.3473291, 0.0], color: [0.5, 0.0, 0.5] }, // D
-    Vertex { position: [0.44147372, 0.2347359, 0.0], color: [0.5, 0.0, 0.5] }, // E
+    Vertex {
+        position: [-0.0868241, 0.49240386, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // A
+    Vertex {
+        position: [-0.49513406, 0.06958647, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // B
+    Vertex {
+        position: [-0.21918549, -0.44939706, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // C
+    Vertex {
+        position: [0.35966998, -0.3473291, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // D
+    Vertex {
+        position: [0.44147372, 0.2347359, 0.0],
+        color: [0.5, 0.0, 0.5],
+    }, // E
 ];
-const INDICES: &[u16] = &[
-    0, 1, 4,
-    1, 2, 4,
-    2, 3, 4,
-];
-
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
 struct State {
     surface: wgpu::Surface,
@@ -125,9 +132,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[
-                    Vertex::desc(),
-                ],
+                buffers: &[Vertex::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -166,9 +171,7 @@ impl State {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: "vs_main",
-                buffers: &[
-                    Vertex::desc(),
-                ],
+                buffers: &[Vertex::desc()],
             },
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
@@ -197,20 +200,16 @@ impl State {
             multiview: None,
         });
 
-        let vertex_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Vertex Buffer"),
-                contents: bytemuck::cast_slice(VERTICES),
-                usage: wgpu::BufferUsages::VERTEX,
-            },
-        );
-        let index_buffer = device.create_buffer_init(
-            &wgpu::util::BufferInitDescriptor {
-                label: Some("Index Buffer"),
-                contents: bytemuck::cast_slice(INDICES),
-                usage: wgpu::BufferUsages::INDEX,
-            },
-        );
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
+            usage: wgpu::BufferUsages::INDEX,
+        });
 
         let clear_color = wgpu::Color {
             r: 0.1,
@@ -252,7 +251,7 @@ impl State {
                     b: 1. - (position.x / self.size.width as f64),
                     a: 1.0,
                 };
-            },
+            }
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -260,7 +259,7 @@ impl State {
                         virtual_keycode: Some(VirtualKeyCode::Space),
                         ..
                     },
-                    ..
+                ..
             } => self.use_main_shader = *state != ElementState::Pressed,
             _ => {}
         }
@@ -293,8 +292,7 @@ impl State {
             });
             if self.use_main_shader {
                 render_pass.set_pipeline(&self.render_pipeline);
-            }
-            else {
+            } else {
                 render_pass.set_pipeline(&self.challenge_pipeline);
             }
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
