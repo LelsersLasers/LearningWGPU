@@ -1,0 +1,10 @@
+c:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\rls\debug\deps\inplace_it-e8aa8cdfe01640ca.rmeta: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\lib.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\mod.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\uninitialized_slice_memory_guard.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\slice_memory_guard.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\fixed_array.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\alloc_array.rs
+
+c:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\rls\debug\deps\inplace_it-e8aa8cdfe01640ca.d: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\lib.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\mod.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\uninitialized_slice_memory_guard.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\slice_memory_guard.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\fixed_array.rs C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\alloc_array.rs
+
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\lib.rs:
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\mod.rs:
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\uninitialized_slice_memory_guard.rs:
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\guards\slice_memory_guard.rs:
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\fixed_array.rs:
+C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\inplace_it-0.3.4\src\alloc_array.rs:

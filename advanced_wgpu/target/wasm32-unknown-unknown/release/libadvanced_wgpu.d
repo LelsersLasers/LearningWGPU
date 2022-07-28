@@ -1,0 +1,1 @@
+C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\wasm32-unknown-unknown\release\libadvanced_wgpu.rlib: C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\src\challenge.wgsl C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\src\lib.rs C:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\src\shader.wgsl

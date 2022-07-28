@@ -1,0 +1,3 @@
+cargo:rustc-cfg=vulkan
+cargo:rustc-cfg=dx12
+cargo:rustc-cfg=dx11
