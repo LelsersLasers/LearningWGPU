@@ -1,8 +1,10 @@
 # LearningWGPU
 I will try to learn the basics of WGPU.
 
+YT screen footage:
+- https://www.youtube.com/playlist?list=PLtlDNK9ff0iXNdrhEUwnzcIAxTX05jVPU
+
 I think I will mainly use these guides:
-- https://www.youtube.com/watch?v=i6WMfY-XTZE&list=PL_UrKDEhALdJS0VrLPn7dqC5A4W1vCAUT&index=1
 - https://sotrh.github.io/learn-wgpu/
 
 Docs:
