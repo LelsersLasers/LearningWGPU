@@ -104,6 +104,8 @@ struct State {
     index_buffer_chal: wgpu::Buffer,
     num_indices_chal: u32,
 
+    angle: f32,
+
     space_down: bool,
 }
 impl State {
@@ -260,7 +262,8 @@ impl State {
             b: 0.3,
             a: 1.0,
         };
-        let space_down = true;
+        let space_down = false;
+        let angle = 0.;
         Self {
             surface,
             device,
@@ -276,6 +279,7 @@ impl State {
             vertex_buffer_chal,
             index_buffer_chal,
             num_indices_chal,
+            angle,
             space_down,
         }
     }
@@ -305,7 +309,7 @@ impl State {
                         ..
                     },
                 ..
-            } => self.space_down = *state != ElementState::Pressed,
+            } => self.space_down = *state == ElementState::Pressed,
             _ => {}
         }
         false
@@ -337,17 +341,62 @@ impl State {
             });
 
             if self.space_down {
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
-            } else {
+                self.angle -= 0.2;
+                let vertices_chal: &[Vertex] = &[
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle).cos(),
+                            deg_to_rad(self.angle).sin(),
+                            0.0,
+                        ],
+                        color: [1.0, 0.0, 0.0],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 90.).cos(),
+                            deg_to_rad(self.angle + 90.).sin(),
+                            0.0,
+                        ],
+                        color: [0.0, 1.0, 0.0],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 180.).cos(),
+                            deg_to_rad(self.angle + 180.).sin(),
+                            0.0,
+                        ],
+                        color: [0.0, 0.0, 1.0],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 270.).cos(),
+                            deg_to_rad(self.angle + 270.).sin(),
+                            0.0,
+                        ],
+                        color: [1.0, 1.0, 1.0],
+                    },
+                ];
+                println!("{}", self.angle);
+                println!("{}", vertices_chal[0].position[0]);
+                self.vertex_buffer_chal =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Challenge Vertex Buffer"),
+                            contents: bytemuck::cast_slice(vertices_chal),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
+
                 render_pass.set_pipeline(&self.render_pipeline_chal);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
                 render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..1);
+            } else {
+                render_pass.set_pipeline(&self.render_pipeline);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
+                render_pass
+                    .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..1);
             }
         }
 
@@ -356,6 +405,10 @@ impl State {
 
         Ok(())
     }
+}
+
+fn deg_to_rad(deg: f32) -> f32 {
+    deg * std::f32::consts::PI / 180.
 }
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
