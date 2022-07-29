@@ -62,29 +62,29 @@ const VERTICES: &[Vertex] = &[
 ];
 const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
 
-// const VERTICES_CHAL: &[Vertex] = &[
-//     Vertex {
-//         // A - top left
-//         position: [-0.5, 0.5, 0.0],
-//         color: [1.0, 0.0, 0.0],
-//     },
-//     Vertex {
-//         // B - bottom left
-//         position: [-0.5, -0.5, 0.0],
-//         color: [0.0, 1.0, 0.0],
-//     },
-//     Vertex {
-//         // C - bottom right
-//         position: [0.5, -0.5, 0.0],
-//         color: [0.0, 0.0, 1.0],
-//     },
-//     Vertex {
-//         // D - top right
-//         position: [0.5, 0.5, 0.0],
-//         color: [1.0, 1.0, 1.0],
-//     },
-// ];
-// const INDICES_CHAL: &[u16] = &[0, 1, 2, 0, 2, 3];
+const VERTICES_CHAL: &[Vertex] = &[
+    Vertex {
+        // A - top left
+        position: [-0.707, 0.707, 0.],
+        tex_coords: [0., 0.],
+    },
+    Vertex {
+        // B - bottom left
+        position: [-0.707, -0.707, 0.],
+        tex_coords: [0., 1.],
+    },
+    Vertex {
+        // C - bottom right
+        position: [0.707, -0.707, 0.],
+        tex_coords: [1., 1.],
+    },
+    Vertex {
+        // D - top right
+        position: [0.707, 0.707, 0.],
+        tex_coords: [1., 0.],
+    },
+];
+const INDICES_CHAL: &[u16] = &[0, 1, 2, 0, 2, 3];
 
 struct State {
     surface: wgpu::Surface,
@@ -96,18 +96,23 @@ struct State {
     clear_color: wgpu::Color,
 
     render_pipeline: wgpu::RenderPipeline,
-    // render_pipeline_chal: wgpu::RenderPipeline,
+    render_pipeline_chal: wgpu::RenderPipeline,
     vertex_buffer: wgpu::Buffer,
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 
-    // vertex_buffer_chal: wgpu::Buffer,
-    // index_buffer_chal: wgpu::Buffer,
-    // num_indices_chal: u32,
+    vertex_buffer_chal: wgpu::Buffer,
+    index_buffer_chal: wgpu::Buffer,
+    num_indices_chal: u32,
+
     diffuse_bind_group: wgpu::BindGroup,
     diffuse_texture: texture::Texture,
 
-    // angle: f32,
+    diffuse_bind_group_chal: wgpu::BindGroup,
+    diffuse_texture_chal: texture::Texture,
+
+    angle: f32,
+
     space_down: bool,
 }
 impl State {
@@ -155,6 +160,10 @@ impl State {
         let diffuse_texture =
             texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
 
+        let diffuse_bytes_chal = include_bytes!("minecraft-grass.png");
+        let diffuse_texture_chal =
+            texture::Texture::from_bytes(&device, &queue, diffuse_bytes_chal, "minecraft-grass.png").unwrap();
+
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 entries: &[
@@ -191,6 +200,21 @@ impl State {
                 },
             ],
             label: Some("diffuse_bind_group"),
+        });
+
+        let diffuse_bind_group_chal = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            layout: &texture_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_chal.view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture_chal.sampler),
+                },
+            ],
+            label: Some("diffuse_bind_group_chal"),
         });
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -238,44 +262,44 @@ impl State {
             multiview: None,
         });
 
-        // let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        //     label: Some("Challenge Shader"),
-        //     source: wgpu::ShaderSource::Wgsl(include_str!("challenge.wgsl").into()),
-        // });
-        // let render_pipeline_chal = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-        //     label: Some("Challenge Render Pipeline"),
-        //     layout: Some(&render_pipeline_layout),
-        //     vertex: wgpu::VertexState {
-        //         module: &shader,
-        //         entry_point: "vs_main",
-        //         buffers: &[Vertex::desc()],
-        //     },
-        //     fragment: Some(wgpu::FragmentState {
-        //         module: &shader,
-        //         entry_point: "fs_main",
-        //         targets: &[Some(wgpu::ColorTargetState {
-        //             format: config.format,
-        //             blend: Some(wgpu::BlendState::REPLACE),
-        //             write_mask: wgpu::ColorWrites::ALL,
-        //         })],
-        //     }),
-        //     primitive: wgpu::PrimitiveState {
-        //         topology: wgpu::PrimitiveTopology::TriangleList,
-        //         strip_index_format: None,
-        //         front_face: wgpu::FrontFace::Ccw,
-        //         cull_mode: Some(wgpu::Face::Back),
-        //         polygon_mode: wgpu::PolygonMode::Fill,
-        //         unclipped_depth: false,
-        //         conservative: false,
-        //     },
-        //     depth_stencil: None,
-        //     multisample: wgpu::MultisampleState {
-        //         count: 1,
-        //         mask: !0,
-        //         alpha_to_coverage_enabled: false,
-        //     },
-        //     multiview: None,
-        // });
+        let shader_chal = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("Challenge Shader"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("challenge.wgsl").into()),
+        });
+        let render_pipeline_chal = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("Challenge Render Pipeline"),
+            layout: Some(&render_pipeline_layout),
+            vertex: wgpu::VertexState {
+                module: &shader_chal,
+                entry_point: "vs_main",
+                buffers: &[Vertex::desc()],
+            },
+            fragment: Some(wgpu::FragmentState {
+                module: &shader_chal,
+                entry_point: "fs_main",
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: config.format,
+                    blend: Some(wgpu::BlendState::REPLACE),
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+            }),
+            primitive: wgpu::PrimitiveState {
+                topology: wgpu::PrimitiveTopology::TriangleList,
+                strip_index_format: None,
+                front_face: wgpu::FrontFace::Ccw,
+                cull_mode: Some(wgpu::Face::Back),
+                polygon_mode: wgpu::PolygonMode::Fill,
+                unclipped_depth: false,
+                conservative: false,
+            },
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState {
+                count: 1,
+                mask: !0,
+                alpha_to_coverage_enabled: false,
+            },
+            multiview: None,
+        });
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -289,17 +313,17 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
-        // let vertex_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Challenge Vertex Buffer"),
-        //     contents: bytemuck::cast_slice(VERTICES_CHAL),
-        //     usage: wgpu::BufferUsages::VERTEX,
-        // });
-        // let index_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-        //     label: Some("Challenge Index Buffer"),
-        //     contents: bytemuck::cast_slice(INDICES_CHAL),
-        //     usage: wgpu::BufferUsages::INDEX,
-        // });
-        // let num_indices_chal = INDICES_CHAL.len() as u32;
+        let vertex_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Challenge Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES_CHAL),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let index_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Challenge Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES_CHAL),
+            usage: wgpu::BufferUsages::INDEX,
+        });
+        let num_indices_chal = INDICES_CHAL.len() as u32;
 
         let clear_color = wgpu::Color {
             r: 0.1,
@@ -308,7 +332,7 @@ impl State {
             a: 1.0,
         };
         let space_down = false;
-        // let angle = 0.;
+        let angle = 0.;
         Self {
             surface,
             device,
@@ -317,16 +341,18 @@ impl State {
             size,
             clear_color,
             render_pipeline,
-            // render_pipeline_chal,
+            render_pipeline_chal,
             vertex_buffer,
             index_buffer,
             num_indices,
-            // vertex_buffer_chal,
-            // index_buffer_chal,
-            // num_indices_chal,
+            vertex_buffer_chal,
+            index_buffer_chal,
+            num_indices_chal,
             diffuse_bind_group,
             diffuse_texture,
-            // angle,
+            diffuse_bind_group_chal,
+            diffuse_texture_chal,
+            angle,
             space_down,
         }
     }
@@ -388,56 +414,55 @@ impl State {
             });
 
             if self.space_down {
-                // self.angle -= 0.2;
-                // let vertices_chal: &[Vertex] = &[
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle).cos(),
-                //             deg_to_rad(self.angle).sin(),
-                //             0.0,
-                //         ],
-                //         color: [1.0, 0.0, 0.0],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 90.).cos(),
-                //             deg_to_rad(self.angle + 90.).sin(),
-                //             0.0,
-                //         ],
-                //         color: [0.0, 1.0, 0.0],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 180.).cos(),
-                //             deg_to_rad(self.angle + 180.).sin(),
-                //             0.0,
-                //         ],
-                //         color: [0.0, 0.0, 1.0],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 270.).cos(),
-                //             deg_to_rad(self.angle + 270.).sin(),
-                //             0.0,
-                //         ],
-                //         color: [1.0, 1.0, 1.0],
-                //     },
-                // ];
-                // println!("{}", self.angle);
-                // println!("{}", vertices_chal[0].position[0]);
-                // self.vertex_buffer_chal =
-                //     self.device
-                //         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                //             label: Some("Challenge Vertex Buffer"),
-                //             contents: bytemuck::cast_slice(vertices_chal),
-                //             usage: wgpu::BufferUsages::VERTEX,
-                //         });
+                self.angle -= 0.2;
+                let vertices_chal: &[Vertex] = &[
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle).cos(),
+                            deg_to_rad(self.angle).sin(),
+                            0.0,
+                        ],
+                        tex_coords: [0., 0.],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 90.).cos(),
+                            deg_to_rad(self.angle + 90.).sin(),
+                            0.0,
+                        ],
+                        tex_coords: [0., 1.],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 180.).cos(),
+                            deg_to_rad(self.angle + 180.).sin(),
+                            0.0,
+                        ],
+                        tex_coords: [1., 1.],
+                    },
+                    Vertex {
+                        position: [
+                            deg_to_rad(self.angle + 270.).cos(),
+                            deg_to_rad(self.angle + 270.).sin(),
+                            0.0,
+                        ],
+                        tex_coords: [1., 0.],
+                    },
+                ];
+                self.vertex_buffer_chal =
+                    self.device
+                        .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                            label: Some("Challenge Vertex Buffer"),
+                            contents: bytemuck::cast_slice(vertices_chal),
+                            usage: wgpu::BufferUsages::VERTEX,
+                        });
 
-                // render_pass.set_pipeline(&self.render_pipeline_chal);
-                // render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
-                // render_pass
-                //     .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
-                // render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..1);
+                render_pass.set_pipeline(&self.render_pipeline_chal);
+                render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
+                render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
+                render_pass
+                    .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
+                render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..1);
             } else {
                 render_pass.set_pipeline(&self.render_pipeline);
                 render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
@@ -455,9 +480,9 @@ impl State {
     }
 }
 
-// fn deg_to_rad(deg: f32) -> f32 {
-//     deg * std::f32::consts::PI / 180.
-// }
+fn deg_to_rad(deg: f32) -> f32 {
+    deg * std::f32::consts::PI / 180.
+}
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen(start))]
 pub async fn run() {
