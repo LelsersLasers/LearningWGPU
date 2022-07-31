@@ -76,15 +76,67 @@ const VERTICES_CHAL: &[Vertex] = &[
     Vertex {
         // C - bottom right
         position: [0.707, -0.707, 0.],
-        tex_coords: [1., 1.],
+        tex_coords: [0.5, 1.],
     },
     Vertex {
         // D - top right
         position: [0.707, 0.707, 0.],
+        tex_coords: [0.5, 0.],
+    },
+    Vertex {
+        // E - top right - left face
+        position: [0.707, 0.707, -1.414],
+        tex_coords: [0., 0.],
+    },
+    Vertex {
+        // F - bottom right - left face
+        position: [0.707, -0.707, -1.414],
+        tex_coords: [0., 1.],
+    },
+    Vertex {
+        // G - top left - right face
+        position: [-0.707, 0.707, -1.414],
+        tex_coords: [0.5, 0.],
+    },
+    Vertex {
+        // H - bottom left - right face
+        position: [-0.707, -0.707, -1.414],
+        tex_coords: [0.5, 1.],
+    },
+
+    Vertex {
+        // G - top left - top face
+        position: [-0.707, 0.707, -1.414],
+        tex_coords: [0.5, 0.],
+    },
+    Vertex {
+        // A - bottom left - top face
+        position: [-0.707, 0.707, 0.],
+        tex_coords: [0.5, 1.],
+    },
+    Vertex {
+        // D - bottom right - top face
+        position: [0.707, 0.707, 0.],
+        tex_coords: [1., 1.],
+    },
+    Vertex {
+        // E - top right - top face
+        position: [0.707, 0.707, -1.414],
         tex_coords: [1., 0.],
     },
 ];
-const INDICES_CHAL: &[u16] = &[0, 1, 2, 0, 2, 3];
+const INDICES_CHAL: &[u16] = &[
+    0, 1, 2,
+    0, 2, 3,
+    3, 2, 5,
+    3, 5, 4,
+    6, 7, 1,
+    6, 1, 0,
+    4, 5, 7,
+    4, 7, 6,
+    8, 9, 10,
+    8, 10, 11,
+];
 
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
@@ -599,50 +651,51 @@ impl State {
 
             if self.space_down {
                 self.angle -= 0.2;
-                let vertices_chal: &[Vertex] = &[
-                    Vertex {
-                        position: [
-                            deg_to_rad(self.angle).cos(),
-                            deg_to_rad(self.angle).sin(),
-                            0.0,
-                        ],
-                        tex_coords: [0., 0.],
-                    },
-                    Vertex {
-                        position: [
-                            deg_to_rad(self.angle + 90.).cos(),
-                            deg_to_rad(self.angle + 90.).sin(),
-                            0.0,
-                        ],
-                        tex_coords: [0., 1.],
-                    },
-                    Vertex {
-                        position: [
-                            deg_to_rad(self.angle + 180.).cos(),
-                            deg_to_rad(self.angle + 180.).sin(),
-                            0.0,
-                        ],
-                        tex_coords: [1., 1.],
-                    },
-                    Vertex {
-                        position: [
-                            deg_to_rad(self.angle + 270.).cos(),
-                            deg_to_rad(self.angle + 270.).sin(),
-                            0.0,
-                        ],
-                        tex_coords: [1., 0.],
-                    },
-                ];
+                // let vertices_chal: &[Vertex] = &[
+                //     Vertex {
+                //         position: [
+                //             deg_to_rad(self.angle).cos(),
+                //             deg_to_rad(self.angle).sin(),
+                //             0.0,
+                //         ],
+                //         tex_coords: [0., 0.],
+                //     },
+                //     Vertex {
+                //         position: [
+                //             deg_to_rad(self.angle + 90.).cos(),
+                //             deg_to_rad(self.angle + 90.).sin(),
+                //             0.0,
+                //         ],
+                //         tex_coords: [0., 1.],
+                //     },
+                //     Vertex {
+                //         position: [
+                //             deg_to_rad(self.angle + 180.).cos(),
+                //             deg_to_rad(self.angle + 180.).sin(),
+                //             0.0,
+                //         ],
+                //         tex_coords: [1., 1.],
+                //     },
+                //     Vertex {
+                //         position: [
+                //             deg_to_rad(self.angle + 270.).cos(),
+                //             deg_to_rad(self.angle + 270.).sin(),
+                //             0.0,
+                //         ],
+                //         tex_coords: [1., 0.],
+                //     },
+                // ];
                 self.vertex_buffer_chal =
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
                             label: Some("Challenge Vertex Buffer"),
-                            contents: bytemuck::cast_slice(vertices_chal),
+                            contents: bytemuck::cast_slice(VERTICES_CHAL),
                             usage: wgpu::BufferUsages::VERTEX,
                         });
 
                 render_pass.set_pipeline(&self.render_pipeline_chal);
                 render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
+                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
                 render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
