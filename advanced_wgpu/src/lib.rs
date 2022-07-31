@@ -83,6 +83,7 @@ const VERTICES_CHAL: &[Vertex] = &[
         position: [0.707, 0.707, 0.],
         tex_coords: [0.5, 0.],
     },
+
     Vertex {
         // E - top right - left face
         position: [0.707, 0.707, -1.414],
@@ -93,6 +94,7 @@ const VERTICES_CHAL: &[Vertex] = &[
         position: [0.707, -0.707, -1.414],
         tex_coords: [0., 1.],
     },
+
     Vertex {
         // G - top left - right face
         position: [-0.707, 0.707, -1.414],
@@ -124,6 +126,27 @@ const VERTICES_CHAL: &[Vertex] = &[
         position: [0.707, 0.707, -1.414],
         tex_coords: [1., 0.],
     },
+
+    Vertex {
+        // F - top left - bottom face
+        position: [0.707, -0.707, -1.414],
+        tex_coords: [0.5, 0.],
+    },
+    Vertex {
+        // C - bottom left - bottom face
+        position: [0.707, -0.707, 0.],
+        tex_coords: [0.5, 1.],
+    },
+    Vertex {
+        // B - bottom right - bottom face
+        position: [-0.707, -0.707, 0.],
+        tex_coords: [1., 1.],
+    },
+    Vertex {
+        // H - top right - bottom face
+        position: [-0.707, -0.707, -1.414],
+        tex_coords: [1., 0.],
+    },
 ];
 const INDICES_CHAL: &[u16] = &[
     0, 1, 2,
@@ -136,6 +159,8 @@ const INDICES_CHAL: &[u16] = &[
     4, 7, 6,
     8, 9, 10,
     8, 10, 11,
+    12, 13, 14,
+    12, 14, 15,
 ];
 
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -159,6 +184,25 @@ impl Camera {
     }
 }
 
+struct CameraStaging {
+    camera: Camera,
+    rotation: cgmath::Deg<f32>,
+}
+impl CameraStaging {
+    fn new(camera: Camera) -> Self {
+        Self {
+            camera,
+            rotation: cgmath::Deg(0.0),
+        }
+    }
+    fn update_camera(&self, camera_uniform: &mut CameraUniform) {
+        camera_uniform.view_proj =
+            (OPENGL_TO_WGPU_MATRIX * self.camera.build_view_projection_matrix()
+                * cgmath::Matrix4::from_angle_z(self.rotation))
+                .into();
+    }
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct CameraUniform {
@@ -171,9 +215,9 @@ impl CameraUniform {
             view_proj: cgmath::Matrix4::identity().into(),
         }
     }
-    fn update_view_proj(&mut self, camera: &Camera) {
-        self.view_proj = camera.build_view_projection_matrix().into();
-    }
+    // fn update_view_proj(&mut self, camera: &Camera) {
+    //     self.view_proj = camera.build_view_projection_matrix().into();
+    // }
 }
 
 struct CameraController {
@@ -262,7 +306,7 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
 
-    camera: Camera,
+    camera_staging: CameraStaging,
     camera_controller: CameraController,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -285,8 +329,6 @@ struct State {
 
     diffuse_bind_group_chal: wgpu::BindGroup,
     diffuse_texture_chal: texture::Texture,
-
-    angle: f32,
 
     space_down: bool,
 }
@@ -409,7 +451,9 @@ impl State {
         let camera_controller = CameraController::new(0.2);
 
         let mut camera_uniform = CameraUniform::new();
-        camera_uniform.update_view_proj(&camera);
+        let camera_staging = CameraStaging::new(camera);
+        camera_staging.update_camera(&mut camera_uniform);
+
         let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Camera Buffer"),
             contents: bytemuck::cast_slice(&[camera_uniform]),
@@ -554,7 +598,6 @@ impl State {
             a: 1.0,
         };
         let space_down = false;
-        let angle = 0.;
 
         Self {
             surface,
@@ -562,7 +605,7 @@ impl State {
             queue,
             config,
             size,
-            camera,
+            camera_staging,
             camera_controller,
             camera_uniform,
             camera_buffer,
@@ -580,7 +623,6 @@ impl State {
             diffuse_texture,
             diffuse_bind_group_chal,
             diffuse_texture_chal,
-            angle,
             space_down,
         }
     }
@@ -616,8 +658,9 @@ impl State {
         self.camera_controller.process_events(event)
     }
     fn update(&mut self) {
-        self.camera_controller.update_camera(&mut self.camera);
-        self.camera_uniform.update_view_proj(&self.camera);
+        self.camera_controller.update_camera(&mut self.camera_staging.camera);
+        self.camera_staging.rotation += cgmath::Deg(2.);
+        self.camera_staging.update_camera(&mut self.camera_uniform);
         self.queue.write_buffer(
             &self.camera_buffer,
             0,
@@ -650,41 +693,6 @@ impl State {
             });
 
             if self.space_down {
-                self.angle -= 0.2;
-                // let vertices_chal: &[Vertex] = &[
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle).cos(),
-                //             deg_to_rad(self.angle).sin(),
-                //             0.0,
-                //         ],
-                //         tex_coords: [0., 0.],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 90.).cos(),
-                //             deg_to_rad(self.angle + 90.).sin(),
-                //             0.0,
-                //         ],
-                //         tex_coords: [0., 1.],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 180.).cos(),
-                //             deg_to_rad(self.angle + 180.).sin(),
-                //             0.0,
-                //         ],
-                //         tex_coords: [1., 1.],
-                //     },
-                //     Vertex {
-                //         position: [
-                //             deg_to_rad(self.angle + 270.).cos(),
-                //             deg_to_rad(self.angle + 270.).sin(),
-                //             0.0,
-                //         ],
-                //         tex_coords: [1., 0.],
-                //     },
-                // ];
                 self.vertex_buffer_chal =
                     self.device
                         .create_buffer_init(&wgpu::util::BufferInitDescriptor {
