@@ -52,6 +52,11 @@ impl Instance {
             .into(),
         }
     }
+    fn spin(&mut self) {
+        let amount = cgmath::Quaternion::from_angle_z(cgmath::Rad(0.01));
+        let current = self.rotation;
+        self.rotation = amount * current;
+    }
 }
 
 #[repr(C)]
@@ -77,12 +82,12 @@ impl InstanceRaw {
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    offset: mem::size_of::<[f32; 8]>() as wgpu::BufferAddress,
                     shader_location: 7,
                     format: wgpu::VertexFormat::Float32x4,
                 },
                 wgpu::VertexAttribute {
-                    offset: mem::size_of::<[f32; 4]>() as wgpu::BufferAddress,
+                    offset: mem::size_of::<[f32; 12]>() as wgpu::BufferAddress,
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
@@ -113,7 +118,7 @@ const VERTICES: &[Vertex] = &[
         tex_coords: [0.9414737, 0.2652641],
     }, // E
 ];
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4];
+const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 const VERTICES_CHAL: &[Vertex] = &[
     Vertex {
@@ -226,7 +231,7 @@ impl Camera {
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
-        return OPENGL_TO_WGPU_MATRIX * proj * view;
+        return proj * view;
     }
 }
 
@@ -635,33 +640,33 @@ impl State {
         });
         let num_indices_chal = INDICES_CHAL.len() as u32;
 
-        let instances = (0..INSTANCES_PER_ROW)
-            .flat_map(|z| {
-                (0..INSTANCES_PER_ROW).map(move |x| {
-                    let position = cgmath::Vector3 {
-                        x: x as f32,
-                        y: 0.0,
-                        z: z as f32,
-                    } - INSTANCE_DISPLACEMENT;
-                    let rotation = if position.is_zero() {
-                        cgmath::Quaternion::from_axis_angle(
-                            cgmath::Vector3::unit_z(),
-                            cgmath::Deg(0.),
-                        )
-                    } else {
-                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.))
+        let instances = (0..INSTANCES_PER_ROW)	
+            .flat_map(|z| {	
+                (0..INSTANCES_PER_ROW).map(move |x| {	
+                    let position = cgmath::Vector3 {	
+                        x: x as f32,	
+                        y: 0.0,	
+                        z: z as f32,	
+                    } - INSTANCE_DISPLACEMENT;	
+                    let rotation = if position.is_zero() {	
+                        cgmath::Quaternion::from_axis_angle(	
+                            cgmath::Vector3::unit_z(),	
+                            cgmath::Deg(0.0),	
+                        )	
+                    } else {	
+                        cgmath::Quaternion::from_axis_angle(position.normalize(), cgmath::Deg(45.0))	
                     };
-                    Instance { position, rotation }
-                })
-            })
-            .collect::<Vec<_>>();
+                    Instance { position, rotation }	
+                })	
+            })	
+            .collect::<Vec<_>>();	
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {	
+            label: Some("Instance Buffer"),	
+            contents: bytemuck::cast_slice(&instance_data),	
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        });	
 
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Instance Buffer"),
-            contents: bytemuck::cast_slice(&instance_data),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
 
         let clear_color = wgpu::Color {
             r: 0.1,
@@ -732,6 +737,18 @@ impl State {
         self.camera_controller.process_events(event)
     }
     fn update(&mut self) {
+
+        for instance in &mut self.instances {
+            instance.spin();
+        }
+
+        let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data)
+        );
+
         self.camera_controller
             .update_camera(&mut self.camera_staging.camera);
         // self.camera_staging.rotation += cgmath::Deg(2.);
@@ -791,7 +808,7 @@ impl State {
                 render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
                 render_pass
                     .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as _);
+                render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32);
             }
         }
 
