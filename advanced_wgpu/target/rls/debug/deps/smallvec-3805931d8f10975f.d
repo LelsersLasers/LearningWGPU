@@ -1,5 +1,0 @@
-c:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\rls\debug\deps\smallvec-3805931d8f10975f.rmeta: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\smallvec-1.9.0\src\lib.rs
-
-c:\Users\milla\Desktop\coding\LearningWGPU\advanced_wgpu\target\rls\debug\deps\smallvec-3805931d8f10975f.d: C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\smallvec-1.9.0\src\lib.rs
-
-C:\Users\milla\.cargo\registry\src\github.com-1ecc6299db9ec823\smallvec-1.9.0\src\lib.rs:
