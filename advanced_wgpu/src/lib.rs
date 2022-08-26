@@ -380,6 +380,8 @@ struct State {
     diffuse_texture_chal: texture::Texture,
 
     space_down: bool,
+
+    last_frame: Option<std::time::Instant>,
 }
 impl State {
     async fn new(window: &Window) -> Self {
@@ -675,6 +677,13 @@ impl State {
             a: 1.0,
         };
         let space_down = false;
+        let mut last_frame = None;
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {}
+            else {
+                last_frame = Some(std::time::Instant::now());
+            }
+        };
 
         Self {
             surface,
@@ -703,6 +712,7 @@ impl State {
             diffuse_bind_group_chal,
             diffuse_texture_chal,
             space_down,
+            last_frame,
         }
     }
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -814,6 +824,16 @@ impl State {
 
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
+
+        cfg_if::cfg_if! {
+            if #[cfg(target_arch = "wasm32")] {}
+            else {
+                let elapsed_seconds = self.last_frame.unwrap().elapsed().as_secs_f64();
+                let fps = 1. / elapsed_seconds;
+                println!("FPS: {:.0}", fps);
+                self.last_frame = Some(std::time::Instant::now());
+            }
+        }
 
         Ok(())
     }
