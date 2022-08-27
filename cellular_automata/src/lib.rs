@@ -42,7 +42,6 @@ impl Vertex {
 
 struct Instance {
     position: cgmath::Vector3<f32>,
-    // rotation: cgmath::Quaternion<f32>,
 }
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
@@ -50,11 +49,6 @@ impl Instance {
             model: cgmath::Matrix4::from_translation(self.position).into()
         }
     }
-    // fn spin(&mut self) {
-    //     let amount = cgmath::Quaternion::from_angle_z(cgmath::Rad(0.01));
-    //     let current = self.rotation;
-    //     self.rotation = amount * current;
-    // }
 }
 
 #[repr(C)]
@@ -93,30 +87,6 @@ impl InstanceRaw {
         }
     }
 }
-
-const VERTICES: &[Vertex] = &[
-    Vertex {
-        position: [-0.0868241, 0.49240386, 0.0],
-        tex_coords: [0.4131759, 0.00759614],
-    }, // A
-    Vertex {
-        position: [-0.49513406, 0.06958647, 0.0],
-        tex_coords: [0.0048659444, 0.43041354],
-    }, // B
-    Vertex {
-        position: [-0.21918549, -0.44939706, 0.0],
-        tex_coords: [0.28081453, 0.949397],
-    }, // C
-    Vertex {
-        position: [0.35966998, -0.3473291, 0.0],
-        tex_coords: [0.85967, 0.84732914],
-    }, // D
-    Vertex {
-        position: [0.44147372, 0.2347359, 0.0],
-        tex_coords: [0.9414737, 0.2652641],
-    }, // E
-];
-const INDICES: &[u16] = &[0, 1, 4, 1, 2, 4, 2, 3, 4, /* padding */ 0];
 
 const VERTICES_CHAL: &[Vertex] = &[
     Vertex {
@@ -360,10 +330,6 @@ struct State {
 
     depth_texture: texture::Texture,
     render_pipeline: wgpu::RenderPipeline,
-    render_pipeline_chal: wgpu::RenderPipeline,
-    vertex_buffer: wgpu::Buffer,
-    index_buffer: wgpu::Buffer,
-    num_indices: u32,
 
     vertex_buffer_chal: wgpu::Buffer,
     index_buffer_chal: wgpu::Buffer,
@@ -372,13 +338,7 @@ struct State {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    diffuse_bind_group: wgpu::BindGroup,
-    diffuse_texture: texture::Texture,
-
     diffuse_bind_group_chal: wgpu::BindGroup,
-    diffuse_texture_chal: texture::Texture,
-
-    space_down: bool,
 
     last_frame: Option<std::time::Instant>,
 }
@@ -423,10 +383,6 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let diffuse_bytes = include_bytes!("happy-tree.png");
-        let diffuse_texture =
-            texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "happy-tree.png").unwrap();
-
         let diffuse_bytes_chal = include_bytes!("minecraft-grass.png");
         let diffuse_texture_chal = texture::Texture::from_bytes(
             &device,
@@ -458,21 +414,6 @@ impl State {
                 ],
                 label: Some("texture_bind_group_layout"),
             });
-
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
 
         let diffuse_bind_group_chal = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
@@ -586,57 +527,6 @@ impl State {
             multiview: None,
         });
 
-        let shader_chal = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Challenge Shader"),
-            source: wgpu::ShaderSource::Wgsl(include_str!("challenge.wgsl").into()),
-        });
-        let render_pipeline_chal = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Challenge Render Pipeline"),
-            layout: Some(&render_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader_chal,
-                entry_point: "vs_main",
-                buffers: &[Vertex::desc()],
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &shader_chal,
-                entry_point: "fs_main",
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: config.format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-            }),
-            primitive: wgpu::PrimitiveState {
-                topology: wgpu::PrimitiveTopology::TriangleList,
-                strip_index_format: None,
-                front_face: wgpu::FrontFace::Ccw,
-                cull_mode: Some(wgpu::Face::Back),
-                polygon_mode: wgpu::PolygonMode::Fill,
-                unclipped_depth: false,
-                conservative: false,
-            },
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState {
-                count: 1,
-                mask: !0,
-                alpha_to_coverage_enabled: false,
-            },
-            multiview: None,
-        });
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES),
-            usage: wgpu::BufferUsages::INDEX,
-        });
-        let num_indices = INDICES.len() as u32;
-
         let vertex_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Challenge Vertex Buffer"),
             contents: bytemuck::cast_slice(VERTICES_CHAL),
@@ -649,19 +539,20 @@ impl State {
         });
         let num_indices_chal = INDICES_CHAL.len() as u32;
 
-        let instances = (0..INSTANCES_PER_ROW)	
-            .flat_map(|z| {	
-                (0..INSTANCES_PER_ROW).map(move |x| {	
-                    let position = cgmath::Vector3 {	
-                        x: x as f32,	
-                        y: 0.0,	
-                        z: z as f32,	
-                    } - INSTANCE_DISPLACEMENT;	
-                    // let rotation = cgmath::Quaternion::from_axis_angle(cgmath::Vector3::unit_y().normalize(), cgmath::Deg(0.));
-                    Instance { position }	
-                })	
-            })	
-            .collect::<Vec<_>>();	
+        let mut instances: Vec<Instance> = Vec::new();
+        for x in 0..INSTANCES_PER_ROW {
+            for y in 0..INSTANCES_PER_ROW {
+                for z in 0..INSTANCES_PER_ROW {
+                    instances.push(Instance {
+                        position: cgmath::Vector3 {	
+                            x: x as f32,	
+                            y: y as f32,	
+                            z: z as f32,	
+                        } - INSTANCE_DISPLACEMENT
+                    });
+                }
+            }
+        }
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {	
             label: Some("Instance Buffer"),	
@@ -669,14 +560,12 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });	
 
-
         let clear_color = wgpu::Color {
             r: 0.1,
             g: 0.2,
             b: 0.3,
             a: 1.0,
         };
-        let space_down = false;
         let mut last_frame = None;
         cfg_if::cfg_if! {
             if #[cfg(target_arch = "wasm32")] {}
@@ -699,20 +588,12 @@ impl State {
             clear_color,
             depth_texture,
             render_pipeline,
-            render_pipeline_chal,
-            vertex_buffer,
-            index_buffer,
-            num_indices,
             vertex_buffer_chal,
             index_buffer_chal,
             num_indices_chal,
             instances,
             instance_buffer,
-            diffuse_bind_group,
-            diffuse_texture,
             diffuse_bind_group_chal,
-            diffuse_texture_chal,
-            space_down,
             last_frame,
         }
     }
@@ -735,25 +616,20 @@ impl State {
                     a: 1.0,
                 };
             }
-            WindowEvent::KeyboardInput {
-                input:
-                    KeyboardInput {
-                        state,
-                        virtual_keycode: Some(VirtualKeyCode::Space),
-                        ..
-                    },
-                ..
-            } => self.space_down = *state == ElementState::Pressed,
+            // WindowEvent::KeyboardInput {
+            //     input:
+            //         KeyboardInput {
+            //             state,
+            //             virtual_keycode: Some(VirtualKeyCode::Space),
+            //             ..
+            //         },
+            //     ..
+            // } => self.space_down = *state == ElementState::Pressed,
             _ => {}
         }
         self.camera_controller.process_events(event)
     }
     fn update(&mut self) {
-
-        // for instance in &mut self.instances {
-        //     instance.spin();
-        // }
-
         let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
         self.queue.write_buffer(
             &self.instance_buffer,
@@ -763,7 +639,6 @@ impl State {
 
         self.camera_controller
             .update_camera(&mut self.camera_staging.camera);
-        // self.camera_staging.rotation += cgmath::Deg(2.);
         self.camera_staging.update_camera(&mut self.camera_uniform);
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -783,58 +658,34 @@ impl State {
             });
 
         {
-            if self.space_down {
-
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(self.clear_color),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                });
-
-                render_pass.set_pipeline(&self.render_pipeline_chal);
-                render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
-                render_pass
-                    .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..1);
-            } else {
-                let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                    label: Some("Render Pass"),
-                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                        view: &view,
-                        resolve_target: None,
-                        ops: wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(self.clear_color),
-                            store: true,
-                        },
-                    })],
-                    depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
-                        view: &self.depth_texture.view,
-                        depth_ops: Some(wgpu::Operations {
-                            load: wgpu::LoadOp::Clear(1.0),
-                            store: true,
-                        }),
-                        stencil_ops: None,
+            let mut render_pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("Render Pass"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view: &view,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        store: true,
+                    },
+                })],
+                depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+                    view: &self.depth_texture.view,
+                    depth_ops: Some(wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(1.0),
+                        store: true,
                     }),
-                });
+                    stencil_ops: None,
+                }),
+            });
 
-                render_pass.set_pipeline(&self.render_pipeline);
-                render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
-                render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-                render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
-                render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-                render_pass
-                    .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
-                render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..self.instances.len() as u32);
-            }
+            render_pass.set_pipeline(&self.render_pipeline);
+            render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
+            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
+            render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
+            render_pass
+                .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..self.instances.len() as u32)
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -894,7 +745,6 @@ pub async fn run() {
                 window_id,
             } if window_id == window.id() => {
                 if !state.input(event) {
-                    // UPDATED!
                     match event {
                         WindowEvent::CloseRequested
                         | WindowEvent::KeyboardInput {
