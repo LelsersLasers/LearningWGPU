@@ -88,7 +88,7 @@ impl InstanceRaw {
     }
 }
 
-const VERTICES_CHAL: &[Vertex] = &[
+const VERTICES: &[Vertex] = &[
     Vertex {
         // A - top left
         position: [-0.5, 0.5, 0.],
@@ -170,15 +170,15 @@ const VERTICES_CHAL: &[Vertex] = &[
         tex_coords: [1., 0.],
     },
 ];
-const INDICES_CHAL: &[u16] = &[
+const INDICES: &[u16] = &[
     0, 1, 2, 0, 2, 3, 3, 2, 5, 3, 5, 4, 6, 7, 1, 6, 1, 0, 4, 5, 7, 4, 7, 6, 8, 9, 10, 8, 10, 11,
     12, 13, 14, 12, 14, 15,
 ];
 
-const INSTANCES_PER_ROW: u32 = 10;
+const INSTANCES_PER_ROW: u32 = 50;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     INSTANCES_PER_ROW as f32 * 0.5,
-    0.,
+    INSTANCES_PER_ROW as f32 * 0.5,
     INSTANCES_PER_ROW as f32 * 0.5,
 );
 
@@ -331,14 +331,14 @@ struct State {
     depth_texture: texture::Texture,
     render_pipeline: wgpu::RenderPipeline,
 
-    vertex_buffer_chal: wgpu::Buffer,
-    index_buffer_chal: wgpu::Buffer,
-    num_indices_chal: u32,
+    vertex_buffer: wgpu::Buffer,
+    index_buffer: wgpu::Buffer,
+    num_indices: u32,
 
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    diffuse_bind_group_chal: wgpu::BindGroup,
+    diffuse_bind_group: wgpu::BindGroup,
 
     last_frame: Option<std::time::Instant>,
 }
@@ -383,11 +383,11 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let diffuse_bytes_chal = include_bytes!("minecraft-grass.png");
-        let diffuse_texture_chal = texture::Texture::from_bytes(
+        let diffuse_bytes = include_bytes!("minecraft-grass.png");
+        let diffuse_texture = texture::Texture::from_bytes(
             &device,
             &queue,
-            diffuse_bytes_chal,
+            diffuse_bytes,
             "minecraft-grass.png",
         )
         .unwrap();
@@ -415,29 +415,29 @@ impl State {
                 label: Some("texture_bind_group_layout"),
             });
 
-        let diffuse_bind_group_chal = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
             layout: &texture_bind_group_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture_chal.view),
+                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture_chal.sampler),
+                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
                 },
             ],
-            label: Some("diffuse_bind_group_chal"),
+            label: Some("diffuse_bind_group"),
         });
 
         let camera = Camera {
-            eye: (0., 1., 2.).into(),
+            eye: (0., 50., 50.).into(),
             target: (0., 0., 0.).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: size.width as f32 / size.height as f32,
             fovy: 45.,
-            znear: 0.1,
-            zfar: 100.,
+            znear: 0.01,
+            zfar: 200.,
         };
         let camera_controller = CameraController::new(0.2);
 
@@ -527,17 +527,17 @@ impl State {
             multiview: None,
         });
 
-        let vertex_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Challenge Vertex Buffer"),
-            contents: bytemuck::cast_slice(VERTICES_CHAL),
+        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Vertex Buffer"),
+            contents: bytemuck::cast_slice(VERTICES),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        let index_buffer_chal = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Challenge Index Buffer"),
-            contents: bytemuck::cast_slice(INDICES_CHAL),
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(INDICES),
             usage: wgpu::BufferUsages::INDEX,
         });
-        let num_indices_chal = INDICES_CHAL.len() as u32;
+        let num_indices = INDICES.len() as u32;
 
         let mut instances: Vec<Instance> = Vec::new();
         for x in 0..INSTANCES_PER_ROW {
@@ -588,12 +588,12 @@ impl State {
             clear_color,
             depth_texture,
             render_pipeline,
-            vertex_buffer_chal,
-            index_buffer_chal,
-            num_indices_chal,
+            vertex_buffer,
+            index_buffer,
+            num_indices,
             instances,
             instance_buffer,
-            diffuse_bind_group_chal,
+            diffuse_bind_group,
             last_frame,
         }
     }
@@ -630,12 +630,12 @@ impl State {
         self.camera_controller.process_events(event)
     }
     fn update(&mut self) {
-        let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
-        self.queue.write_buffer(
-            &self.instance_buffer,
-            0,
-            bytemuck::cast_slice(&instance_data)
-        );
+        // let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
+        // self.queue.write_buffer(
+        //     &self.instance_buffer,
+        //     0,
+        //     bytemuck::cast_slice(&instance_data)
+        // );
 
         self.camera_controller
             .update_camera(&mut self.camera_staging.camera);
@@ -679,13 +679,13 @@ impl State {
             });
 
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group_chal, &[]);
+            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
-            render_pass.set_vertex_buffer(0, self.vertex_buffer_chal.slice(..));
+            render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass
-                .set_index_buffer(self.index_buffer_chal.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices_chal, 0, 0..self.instances.len() as u32)
+                .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32)
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
