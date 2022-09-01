@@ -275,12 +275,22 @@ struct Camera {
     fovy: f32,
     znear: f32,
     zfar: f32,
+    lat: f32,
+    lon: f32,
+    radius: f32,
 }
 impl Camera {
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
         return proj * view;
+    }
+    fn update_eye(&mut self) {
+        self.eye = cgmath::Point3::new(
+            self.radius * self.lat.cos() * self.lon.cos(),
+            self.radius * self.lat.cos() * self.lon.sin(),
+            self.radius * self.lon.sin(),
+        );
     }
 }
 
@@ -318,8 +328,8 @@ impl CameraUniform {
 
 struct CameraController {
     speed: f32,
-    forward_down: bool,
-    backward_down: bool,
+    up_down: bool,
+    down_down: bool,
     left_down: bool,
     right_down: bool,
 }
@@ -327,8 +337,8 @@ impl CameraController {
     fn new(speed: f32) -> Self {
         Self {
             speed,
-            forward_down: false,
-            backward_down: false,
+            up_down: false,
+            down_down: false,
             left_down: false,
             right_down: false,
         }
@@ -347,11 +357,11 @@ impl CameraController {
                 let pressed = *state == ElementState::Pressed;
                 match keycode {
                     VirtualKeyCode::W | VirtualKeyCode::Up => {
-                        self.forward_down = pressed;
+                        self.up_down = pressed;
                         true
                     }
                     VirtualKeyCode::S | VirtualKeyCode::Down => {
-                        self.backward_down = pressed;
+                        self.down_down = pressed;
                         true
                     }
                     VirtualKeyCode::A | VirtualKeyCode::Left => {
@@ -369,28 +379,20 @@ impl CameraController {
         }
     }
     fn update_camera(&self, camera: &mut Camera) {
-        let forward = camera.target - camera.eye;
-        let forward_norm = forward.normalize();
-        let forward_mag = forward.magnitude();
-
-        if self.forward_down && forward_mag > self.speed {
-            camera.eye += forward_norm * self.speed;
+        if self.up_down {
+            camera.lat += std::f32::consts::PI;
         }
-        if self.backward_down {
-            camera.eye -= forward_norm * self.speed;
-        }
-
-        let right = forward_norm.cross(camera.up);
-
-        let forward = camera.target - camera.eye;
-        let forward_mag = forward.magnitude();
-
-        if self.right_down {
-            camera.eye = camera.target - (forward + right * self.speed).normalize() * forward_mag;
+        if self.down_down {
+            camera.lat -= std::f32::consts::PI;
         }
         if self.left_down {
-            camera.eye = camera.target - (forward - right * self.speed).normalize() * forward_mag;
+            camera.lon -= std::f32::consts::PI;
         }
+        if self.right_down {
+            camera.lon += std::f32::consts::PI;
+        }
+
+        camera.update_eye();
     }
 }
 
@@ -465,57 +467,17 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        // let diffuse_bytes = include_bytes!("minecraft-grass.png");
-        // let diffuse_texture =
-        //     texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "minecraft-grass.png")
-        //         .unwrap();
-
-        // let texture_bind_group_layout =
-        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-        //         entries: &[
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 0,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Texture {
-        //                     multisampled: false,
-        //                     view_dimension: wgpu::TextureViewDimension::D2,
-        //                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
-        //                 },
-        //                 count: None,
-        //             },
-        //             wgpu::BindGroupLayoutEntry {
-        //                 binding: 1,
-        //                 visibility: wgpu::ShaderStages::FRAGMENT,
-        //                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-        //                 count: None,
-        //             },
-        //         ],
-        //         label: Some("texture_bind_group_layout"),
-        //     });
-
-        // let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        //     layout: &texture_bind_group_layout,
-        //     entries: &[
-        //         wgpu::BindGroupEntry {
-        //             binding: 0,
-        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-        //         },
-        //         wgpu::BindGroupEntry {
-        //             binding: 1,
-        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-        //         },
-        //     ],
-        //     label: Some("diffuse_bind_group"),
-        // });
-
         let camera = Camera {
-            eye: (0., 50., 50.).into(),
+            eye: (0., 75., 75.).into(),
             target: (0., 0., 0.).into(),
             up: cgmath::Vector3::unit_y(),
             aspect: size.width as f32 / size.height as f32,
             fovy: 45.,
             znear: 0.01,
             zfar: 300.,
+            lat: 20.,
+            lon: 20.,
+            radius: INSTANCES_PER_ROW as f32 * 1.75,
         };
         let camera_controller = CameraController::new(0.2);
 
