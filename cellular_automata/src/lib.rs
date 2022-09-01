@@ -8,6 +8,7 @@ use wgpu::util::DeviceExt;
 
 use cgmath::prelude::*;
 
+use rand::prelude::*;
 mod texture;
 
 #[cfg(target_arch = "wasm32")]
@@ -17,25 +18,17 @@ use wasm_bindgen::prelude::*;
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 3],
-    color: [f32; 3],
 }
 impl Vertex {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
         wgpu::VertexBufferLayout {
             array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
             step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                wgpu::VertexAttribute {
-                    offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-            ],
+            attributes: &[wgpu::VertexAttribute {
+                offset: 0,
+                shader_location: 0,
+                format: wgpu::VertexFormat::Float32x3,
+            }],
         }
     }
 }
@@ -54,9 +47,18 @@ impl Cell {
             neighbors: 0,
         }
     }
+    fn get_color(&self) -> [f32; 3] {
+        if self.hp == STATE as i32 {
+            [0.9, 0., 0.]
+        } else {
+            let intensity = (1. + self.hp as f32) / (STATE as f32 + 2.);
+            [intensity, intensity, intensity]
+        }
+    }
     fn create_instance(&self) -> Instance {
         Instance {
             position: self.position,
+            color: self.get_color(),
         }
     }
     fn get_alive(&self) -> bool {
@@ -66,8 +68,7 @@ impl Cell {
         self.hp >= 0
     }
     fn sync(&mut self) {
-        self.hp = 
-            (self.hp == STATE as i32) as i32 * (self.hp - 1 + SURVIVAL[self.neighbors as usize] as i32) + // alive
+        self.hp = (self.hp == STATE as i32) as i32 * (self.hp - 1 + SURVIVAL[self.neighbors as usize] as i32) + // alive
             (self.hp < 0) as i32 * (SPAWN[self.neighbors as usize] as i32 * (STATE + 1) as i32 - 1) +  // dead
             (self.hp >= 0 && self.hp < STATE as i32) as i32 * (self.hp - 1); // dying
     }
@@ -76,11 +77,13 @@ impl Cell {
 #[derive(Clone, Copy)]
 struct Instance {
     position: cgmath::Vector3<f32>,
+    color: [f32; 3],
 }
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
             model: cgmath::Matrix4::from_translation(self.position).into(),
+            color: self.color,
         }
     }
 }
@@ -89,6 +92,7 @@ impl Instance {
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct InstanceRaw {
     model: [[f32; 4]; 4],
+    color: [f32; 3],
 }
 impl InstanceRaw {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -117,6 +121,12 @@ impl InstanceRaw {
                     shader_location: 8,
                     format: wgpu::VertexFormat::Float32x4,
                 },
+                wgpu::VertexAttribute {
+                    //  color
+                    offset: std::mem::size_of::<[f32; 16]>() as wgpu::BufferAddress,
+                    shader_location: 9,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
             ],
         }
     }
@@ -126,98 +136,66 @@ const VERTICES: &[Vertex] = &[
     Vertex {
         // A - top left
         position: [-0.5, 0.5, 0.],
-        // tex_coords: [0., 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // B - bottom left
         position: [-0.5, -0.5, 0.],
-        // tex_coords: [0., 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // C - bottom right
         position: [0.5, -0.5, 0.],
-        // tex_coords: [0.5, 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // D - top right
         position: [0.5, 0.5, 0.],
-        // tex_coords: [0.5, 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // E - top right - left face
         position: [0.5, 0.5, -1.],
-        // tex_coords: [0., 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // F - bottom right - left face
         position: [0.5, -0.5, -1.],
-        // tex_coords: [0., 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // G - top left - right face
         position: [-0.5, 0.5, -1.],
-        // tex_coords: [0.5, 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // H - bottom left - right face
         position: [-0.5, -0.5, -1.],
-        // tex_coords: [0.5, 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // G - top left - top face
         position: [-0.5, 0.5, -1.],
-        // tex_coords: [0.5, 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // A - bottom left - top face
         position: [-0.5, 0.5, 0.],
-        // tex_coords: [0.5, 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // D - bottom right - top face
         position: [0.5, 0.5, 0.],
-        // tex_coords: [1., 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // E - top right - top face
         position: [0.5, 0.5, -1.],
-        // tex_coords: [1., 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // F - top left - bottom face
         position: [0.5, -0.5, -1.],
-        // tex_coords: [0.5, 0.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // C - bottom left - bottom face
         position: [0.5, -0.5, 0.],
-        // tex_coords: [0.5, 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // B - bottom right - bottom face
         position: [-0.5, -0.5, 0.],
-        // tex_coords: [1., 1.],
-        color: [0., 1., 0.],
     },
     Vertex {
         // H - top right - bottom face
         position: [-0.5, -0.5, -1.],
-        // tex_coords: [1., 0.],
-        color: [0., 1., 0.],
     },
 ];
 const INDICES: &[u16] = &[
@@ -225,7 +203,7 @@ const INDICES: &[u16] = &[
     12, 13, 14, 12, 14, 15,
 ];
 
-const INSTANCES_PER_ROW: u32 = 30;
+const INSTANCES_PER_ROW: u32 = 50;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     INSTANCES_PER_ROW as f32 * 0.5,
     INSTANCES_PER_ROW as f32 * 0.5,
@@ -238,11 +216,14 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
 
 const STATE: u32 = 10;
 const SURVIVAL: [bool; 27] = [
-    false, false, true, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+    false, false, true, false, false, false, true, false, false, true, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
 ];
 const SPAWN: [bool; 27] = [
-    false, false, false, false, true, false, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+    false, false, false, false, true, false, true, false, true, true, false, false, false, false,
+    false, false, false, false, false, false, false, false, false, false, false, false, false,
 ];
+const ALIVE_CHANCE_ON_START: f32 = 0.15;
 const NEIGHBOR_OFFSETS: [(i32, i32, i32); 26] = [
     (1, 0, 0),
     (-1, 0, 0),
@@ -439,7 +420,6 @@ struct State {
     instance_buffer: wgpu::Buffer,
 
     // diffuse_bind_group: wgpu::BindGroup,
-
     last_frame: Option<std::time::Instant>,
 
     cells: Vec<Cell>,
@@ -638,6 +618,7 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
+        let mut rng = rand::thread_rng();
         let mut instances: Vec<Instance> = Vec::new();
         let mut cells: Vec<Cell> = Vec::new();
         for x in 0..INSTANCES_PER_ROW {
@@ -649,7 +630,7 @@ impl State {
                             y: y as f32,
                             z: z as f32,
                         } - INSTANCE_DISPLACEMENT,
-                        0,
+                        -1,
                     );
                     if x >= INSTANCES_PER_ROW / 3
                         && x <= INSTANCES_PER_ROW * 2 / 3
@@ -657,7 +638,7 @@ impl State {
                         && y <= INSTANCES_PER_ROW * 2 / 3
                         && z >= INSTANCES_PER_ROW / 3
                         && z <= INSTANCES_PER_ROW * 2 / 3
-                        && rand::random()
+                        && ALIVE_CHANCE_ON_START < rng.gen()
                     {
                         cell.hp = STATE as i32;
                     }
@@ -666,7 +647,6 @@ impl State {
                 }
             }
         }
-        println!("{}", cells.len());
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
@@ -796,12 +776,8 @@ impl State {
                     stencil_ops: None,
                 }),
             });
-            println!("a");
             render_pass.set_pipeline(&self.render_pipeline);
-            println!("b");
-            // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
             render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
-            println!("c");
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
