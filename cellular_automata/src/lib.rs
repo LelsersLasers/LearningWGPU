@@ -40,6 +40,31 @@ impl Vertex {
     }
 }
 
+#[derive(Clone, Copy)]
+struct Cell {
+    position: cgmath::Vector3<f32>,
+    hp: i32,
+    neighbors: u32,
+}
+impl Cell {
+    fn new(position: cgmath::Vector3<f32>, hp: i32) -> Self {
+        Self {
+            position,
+            hp,
+            neighbors: 0,
+        }
+    }
+    fn create_instance(&self) -> Instance {
+        Instance {
+            position: self.position
+        }
+    }
+    fn get_alive(&self) -> bool {
+        self.hp == 10
+    }
+}
+
+#[derive(Clone, Copy)]
 struct Instance {
     position: cgmath::Vector3<f32>,
 }
@@ -175,7 +200,7 @@ const INDICES: &[u16] = &[
     12, 13, 14, 12, 14, 15,
 ];
 
-const INSTANCES_PER_ROW: u32 = 50;
+const INSTANCES_PER_ROW: u32 = 30;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     INSTANCES_PER_ROW as f32 * 0.5,
     INSTANCES_PER_ROW as f32 * 0.5,
@@ -185,6 +210,10 @@ const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
 );
+
+fn three_to_one(x: u32, y: u32, z: u32) -> u32 {
+    z + y * INSTANCES_PER_ROW + x * INSTANCES_PER_ROW * INSTANCES_PER_ROW
+}
 
 struct Camera {
     eye: cgmath::Point3<f32>,
@@ -341,6 +370,9 @@ struct State {
     diffuse_bind_group: wgpu::BindGroup,
 
     last_frame: Option<std::time::Instant>,
+
+
+    cells: Vec<Cell>,
 }
 impl State {
     async fn new(window: &Window) -> Self {
@@ -351,7 +383,7 @@ impl State {
         // NOTE: could be none, see: https://sotrh.github.io/learn-wgpu/beginner/tutorial2-surface/#state-new
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
@@ -437,7 +469,7 @@ impl State {
             aspect: size.width as f32 / size.height as f32,
             fovy: 45.,
             znear: 0.01,
-            zfar: 200.,
+            zfar: 300.,
         };
         let camera_controller = CameraController::new(0.2);
 
@@ -540,16 +572,25 @@ impl State {
         let num_indices = INDICES.len() as u32;
 
         let mut instances: Vec<Instance> = Vec::new();
-        for x in 0..INSTANCES_PER_ROW {
-            for y in 0..INSTANCES_PER_ROW {
-                for z in 0..INSTANCES_PER_ROW {
-                    instances.push(Instance {
-                        position: cgmath::Vector3 {	
+        let mut cells: Vec<Cell> = Vec::new();
+        for x in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
+            for y in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
+                for z in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
+                    if rand::random() {
+                        let cell = Cell::new(cgmath::Vector3 {	
                             x: x as f32,	
                             y: y as f32,	
                             z: z as f32,	
-                        } - INSTANCE_DISPLACEMENT
-                    });
+                        } - INSTANCE_DISPLACEMENT, 10);
+                        cells.push(cell);
+                        instances.push(cell.create_instance());
+                    } else {
+                        cells.push(Cell::new(cgmath::Vector3 {	
+                            x: x as f32,	
+                            y: y as f32,	
+                            z: z as f32,	
+                        } - INSTANCE_DISPLACEMENT, 0));
+                    }
                 }
             }
         }
@@ -595,6 +636,7 @@ impl State {
             instance_buffer,
             diffuse_bind_group,
             last_frame,
+            cells,
         }
     }
     fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>) {
@@ -629,13 +671,22 @@ impl State {
         }
         self.camera_controller.process_events(event)
     }
+    fn get_instance_data(&mut self) -> Vec<InstanceRaw> {
+        self.instances.clear();
+        for cell in self.cells.iter() {
+            if cell.get_alive() {
+                self.instances.push(cell.create_instance());
+            }
+        }
+        self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>()	
+    }
     fn update(&mut self) {
-        // let instance_data = self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
-        // self.queue.write_buffer(
-        //     &self.instance_buffer,
-        //     0,
-        //     bytemuck::cast_slice(&instance_data)
-        // );
+        let instance_data = self.get_instance_data();
+        self.queue.write_buffer(
+            &self.instance_buffer,
+            0,
+            bytemuck::cast_slice(&instance_data)
+        );
 
         self.camera_controller
             .update_camera(&mut self.camera_staging.camera);
