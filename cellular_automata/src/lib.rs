@@ -17,7 +17,7 @@ use wasm_bindgen::prelude::*;
 #[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 3],
-    tex_coords: [f32; 2],
+    color: [f32; 3],
 }
 impl Vertex {
     fn desc<'a>() -> wgpu::VertexBufferLayout<'a> {
@@ -33,7 +33,7 @@ impl Vertex {
                 wgpu::VertexAttribute {
                     offset: std::mem::size_of::<[f32; 3]>() as wgpu::BufferAddress,
                     shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x2,
+                    format: wgpu::VertexFormat::Float32x3,
                 },
             ],
         }
@@ -56,11 +56,20 @@ impl Cell {
     }
     fn create_instance(&self) -> Instance {
         Instance {
-            position: self.position
+            position: self.position,
         }
     }
     fn get_alive(&self) -> bool {
-        self.hp == 10
+        self.hp == STATE as i32
+    }
+    fn should_draw(&self) -> bool {
+        self.hp >= 0
+    }
+    fn sync(&mut self) {
+        self.hp = 
+            (self.hp == STATE as i32) as i32 * (self.hp - 1 + SURVIVAL[self.neighbors as usize] as i32) + // alive
+            (self.hp < 0) as i32 * (SPAWN[self.neighbors as usize] as i32 * (STATE + 1) as i32 - 1) +  // dead
+            (self.hp >= 0 && self.hp < STATE as i32) as i32 * (self.hp - 1); // dying
     }
 }
 
@@ -71,7 +80,7 @@ struct Instance {
 impl Instance {
     fn to_raw(&self) -> InstanceRaw {
         InstanceRaw {
-            model: cgmath::Matrix4::from_translation(self.position).into()
+            model: cgmath::Matrix4::from_translation(self.position).into(),
         }
     }
 }
@@ -117,82 +126,98 @@ const VERTICES: &[Vertex] = &[
     Vertex {
         // A - top left
         position: [-0.5, 0.5, 0.],
-        tex_coords: [0., 0.],
+        // tex_coords: [0., 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // B - bottom left
         position: [-0.5, -0.5, 0.],
-        tex_coords: [0., 1.],
+        // tex_coords: [0., 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // C - bottom right
         position: [0.5, -0.5, 0.],
-        tex_coords: [0.5, 1.],
+        // tex_coords: [0.5, 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // D - top right
         position: [0.5, 0.5, 0.],
-        tex_coords: [0.5, 0.],
+        // tex_coords: [0.5, 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // E - top right - left face
         position: [0.5, 0.5, -1.],
-        tex_coords: [0., 0.],
+        // tex_coords: [0., 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // F - bottom right - left face
         position: [0.5, -0.5, -1.],
-        tex_coords: [0., 1.],
+        // tex_coords: [0., 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // G - top left - right face
         position: [-0.5, 0.5, -1.],
-        tex_coords: [0.5, 0.],
+        // tex_coords: [0.5, 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // H - bottom left - right face
         position: [-0.5, -0.5, -1.],
-        tex_coords: [0.5, 1.],
+        // tex_coords: [0.5, 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // G - top left - top face
         position: [-0.5, 0.5, -1.],
-        tex_coords: [0.5, 0.],
+        // tex_coords: [0.5, 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // A - bottom left - top face
         position: [-0.5, 0.5, 0.],
-        tex_coords: [0.5, 1.],
+        // tex_coords: [0.5, 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // D - bottom right - top face
         position: [0.5, 0.5, 0.],
-        tex_coords: [1., 1.],
+        // tex_coords: [1., 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // E - top right - top face
         position: [0.5, 0.5, -1.],
-        tex_coords: [1., 0.],
+        // tex_coords: [1., 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // F - top left - bottom face
         position: [0.5, -0.5, -1.],
-        tex_coords: [0.5, 0.],
+        // tex_coords: [0.5, 0.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // C - bottom left - bottom face
         position: [0.5, -0.5, 0.],
-        tex_coords: [0.5, 1.],
+        // tex_coords: [0.5, 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // B - bottom right - bottom face
         position: [-0.5, -0.5, 0.],
-        tex_coords: [1., 1.],
+        // tex_coords: [1., 1.],
+        color: [0., 1., 0.],
     },
     Vertex {
         // H - top right - bottom face
         position: [-0.5, -0.5, -1.],
-        tex_coords: [1., 0.],
+        // tex_coords: [1., 0.],
+        color: [0., 1., 0.],
     },
 ];
 const INDICES: &[u16] = &[
@@ -211,8 +236,54 @@ pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 0.5, 0.0, 0.0, 0.0, 0.5, 1.0,
 );
 
-fn three_to_one(x: u32, y: u32, z: u32) -> u32 {
-    z + y * INSTANCES_PER_ROW + x * INSTANCES_PER_ROW * INSTANCES_PER_ROW
+const STATE: u32 = 10;
+const SURVIVAL: [bool; 27] = [
+    false, false, true, false, false, false, true, false, false, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+];
+const SPAWN: [bool; 27] = [
+    false, false, false, false, true, false, true, false, true, true, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false, false
+];
+const NEIGHBOR_OFFSETS: [(i32, i32, i32); 26] = [
+    (1, 0, 0),
+    (-1, 0, 0),
+    (0, 1, 0),
+    (0, -1, 0),
+    (0, 0, 1),
+    (0, 0, -1),
+    (1, 1, 0),
+    (-1, 1, 0),
+    (1, -1, 0),
+    (-1, -1, 0),
+    (1, 0, 1),
+    (-1, 0, 1),
+    (1, 0, -1),
+    (-1, 0, -1),
+    (0, 1, 1),
+    (0, -1, 1),
+    (0, 1, -1),
+    (0, -1, -1),
+    (1, 1, 1),
+    (-1, 1, 1),
+    (1, -1, 1),
+    (-1, -1, 1),
+    (1, 1, -1),
+    (-1, 1, -1),
+    (1, -1, -1),
+    (-1, -1, -1),
+];
+
+fn three_to_one(x: u32, y: u32, z: u32) -> usize {
+    z as usize
+        + y as usize * INSTANCES_PER_ROW as usize
+        + x as usize * INSTANCES_PER_ROW as usize * INSTANCES_PER_ROW as usize
+}
+fn valid_idx(x: u32, y: u32, z: u32, offset: (i32, i32, i32)) -> bool {
+    x as i32 + offset.0 >= 0
+        && x as i32 + offset.0 < INSTANCES_PER_ROW as i32
+        && y as i32 + offset.1 >= 0
+        && y as i32 + offset.1 < INSTANCES_PER_ROW as i32
+        && z as i32 + offset.2 >= 0
+        && z as i32 + offset.2 < INSTANCES_PER_ROW as i32
 }
 
 struct Camera {
@@ -367,10 +438,9 @@ struct State {
     instances: Vec<Instance>,
     instance_buffer: wgpu::Buffer,
 
-    diffuse_bind_group: wgpu::BindGroup,
+    // diffuse_bind_group: wgpu::BindGroup,
 
     last_frame: Option<std::time::Instant>,
-
 
     cells: Vec<Cell>,
 }
@@ -415,52 +485,48 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let diffuse_bytes = include_bytes!("minecraft-grass.png");
-        let diffuse_texture = texture::Texture::from_bytes(
-            &device,
-            &queue,
-            diffuse_bytes,
-            "minecraft-grass.png",
-        )
-        .unwrap();
+        // let diffuse_bytes = include_bytes!("minecraft-grass.png");
+        // let diffuse_texture =
+        //     texture::Texture::from_bytes(&device, &queue, diffuse_bytes, "minecraft-grass.png")
+        //         .unwrap();
 
-        let texture_bind_group_layout =
-            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                entries: &[
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 0,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Texture {
-                            multisampled: false,
-                            view_dimension: wgpu::TextureViewDimension::D2,
-                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        },
-                        count: None,
-                    },
-                    wgpu::BindGroupLayoutEntry {
-                        binding: 1,
-                        visibility: wgpu::ShaderStages::FRAGMENT,
-                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                        count: None,
-                    },
-                ],
-                label: Some("texture_bind_group_layout"),
-            });
+        // let texture_bind_group_layout =
+        //     device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+        //         entries: &[
+        //             wgpu::BindGroupLayoutEntry {
+        //                 binding: 0,
+        //                 visibility: wgpu::ShaderStages::FRAGMENT,
+        //                 ty: wgpu::BindingType::Texture {
+        //                     multisampled: false,
+        //                     view_dimension: wgpu::TextureViewDimension::D2,
+        //                     sample_type: wgpu::TextureSampleType::Float { filterable: true },
+        //                 },
+        //                 count: None,
+        //             },
+        //             wgpu::BindGroupLayoutEntry {
+        //                 binding: 1,
+        //                 visibility: wgpu::ShaderStages::FRAGMENT,
+        //                 ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+        //                 count: None,
+        //             },
+        //         ],
+        //         label: Some("texture_bind_group_layout"),
+        //     });
 
-        let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            layout: &texture_bind_group_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
-                },
-            ],
-            label: Some("diffuse_bind_group"),
-        });
+        // let diffuse_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        //     layout: &texture_bind_group_layout,
+        //     entries: &[
+        //         wgpu::BindGroupEntry {
+        //             binding: 0,
+        //             resource: wgpu::BindingResource::TextureView(&diffuse_texture.view),
+        //         },
+        //         wgpu::BindGroupEntry {
+        //             binding: 1,
+        //             resource: wgpu::BindingResource::Sampler(&diffuse_texture.sampler),
+        //         },
+        //     ],
+        //     label: Some("diffuse_bind_group"),
+        // });
 
         let camera = Camera {
             eye: (0., 50., 50.).into(),
@@ -506,7 +572,8 @@ impl State {
             label: Some("camera_bind_group"),
         });
 
-        let depth_texture = texture::Texture::create_depth_texture(&device, &config, "depth_texture");
+        let depth_texture =
+            texture::Texture::create_depth_texture(&device, &config, "depth_texture");
 
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Shader"),
@@ -515,7 +582,7 @@ impl State {
         let render_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Render Pipeline Layout"),
-                bind_group_layouts: &[&texture_bind_group_layout, &camera_bind_group_layout],
+                bind_group_layouts: &[&camera_bind_group_layout],
                 push_constant_ranges: &[],
             });
         let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
@@ -548,7 +615,7 @@ impl State {
                 format: texture::Texture::DEPTH_FORMAT,
                 depth_write_enabled: true,
                 depth_compare: wgpu::CompareFunction::Less,
-                stencil: wgpu:: StencilState::default(),
+                stencil: wgpu::StencilState::default(),
                 bias: wgpu::DepthBiasState::default(),
             }),
             multisample: wgpu::MultisampleState {
@@ -573,33 +640,39 @@ impl State {
 
         let mut instances: Vec<Instance> = Vec::new();
         let mut cells: Vec<Cell> = Vec::new();
-        for x in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
-            for y in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
-                for z in INSTANCES_PER_ROW/3..INSTANCES_PER_ROW * 2/3 {
-                    if rand::random() {
-                        let cell = Cell::new(cgmath::Vector3 {	
-                            x: x as f32,	
-                            y: y as f32,	
-                            z: z as f32,	
-                        } - INSTANCE_DISPLACEMENT, 10);
-                        cells.push(cell);
-                        instances.push(cell.create_instance());
-                    } else {
-                        cells.push(Cell::new(cgmath::Vector3 {	
-                            x: x as f32,	
-                            y: y as f32,	
-                            z: z as f32,	
-                        } - INSTANCE_DISPLACEMENT, 0));
+        for x in 0..INSTANCES_PER_ROW {
+            for y in 0..INSTANCES_PER_ROW {
+                for z in 0..INSTANCES_PER_ROW {
+                    let mut cell = Cell::new(
+                        cgmath::Vector3 {
+                            x: x as f32,
+                            y: y as f32,
+                            z: z as f32,
+                        } - INSTANCE_DISPLACEMENT,
+                        0,
+                    );
+                    if x >= INSTANCES_PER_ROW / 3
+                        && x <= INSTANCES_PER_ROW * 2 / 3
+                        && y >= INSTANCES_PER_ROW / 3
+                        && y <= INSTANCES_PER_ROW * 2 / 3
+                        && z >= INSTANCES_PER_ROW / 3
+                        && z <= INSTANCES_PER_ROW * 2 / 3
+                        && rand::random()
+                    {
+                        cell.hp = STATE as i32;
                     }
+                    cells.push(cell);
+                    instances.push(cell.create_instance());
                 }
             }
         }
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();	
-        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {	
-            label: Some("Instance Buffer"),	
-            contents: bytemuck::cast_slice(&instance_data),	
+        println!("{}", cells.len());
+        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
+        let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Instance Buffer"),
+            contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-        });	
+        });
 
         let clear_color = wgpu::Color {
             r: 0.1,
@@ -634,7 +707,7 @@ impl State {
             num_indices,
             instances,
             instance_buffer,
-            diffuse_bind_group,
+            // diffuse_bind_group,
             last_frame,
             cells,
         }
@@ -645,7 +718,8 @@ impl State {
             self.config.width = new_size.width;
             self.config.height = new_size.height;
             self.surface.configure(&self.device, &self.config);
-            self.depth_texture = texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.depth_texture =
+                texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
         }
     }
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -671,21 +745,15 @@ impl State {
         }
         self.camera_controller.process_events(event)
     }
-    fn get_instance_data(&mut self) -> Vec<InstanceRaw> {
-        self.instances.clear();
-        for cell in self.cells.iter() {
-            if cell.get_alive() {
-                self.instances.push(cell.create_instance());
-            }
-        }
-        self.instances.iter().map(Instance::to_raw).collect::<Vec<_>>()	
-    }
     fn update(&mut self) {
+        self.count_neighbors();
+        self.sync_cells();
+
         let instance_data = self.get_instance_data();
         self.queue.write_buffer(
             &self.instance_buffer,
             0,
-            bytemuck::cast_slice(&instance_data)
+            bytemuck::cast_slice(&instance_data),
         );
 
         self.camera_controller
@@ -728,14 +796,15 @@ impl State {
                     stencil_ops: None,
                 }),
             });
-
+            println!("a");
             render_pass.set_pipeline(&self.render_pipeline);
-            render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
-            render_pass.set_bind_group(1, &self.camera_bind_group, &[]);
+            println!("b");
+            // render_pass.set_bind_group(0, &self.diffuse_bind_group, &[]);
+            render_pass.set_bind_group(0, &self.camera_bind_group, &[]);
+            println!("c");
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
-            render_pass
-                .set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
+            render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
             render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32)
         }
 
@@ -753,6 +822,52 @@ impl State {
         }
 
         Ok(())
+    }
+
+    fn get_instance_data(&mut self) -> Vec<InstanceRaw> {
+        self.instances.clear();
+        for cell in self.cells.iter() {
+            if cell.should_draw() {
+                self.instances.push(cell.create_instance());
+            }
+        }
+        // for _i in self.instances.len()..self.cells.len() {
+        //     self.instances.push(Instance {
+        //         position: cgmath::Vector3 { x: , y: (), z: () }
+        //     });
+        // }
+        self.instances
+            .iter()
+            .map(Instance::to_raw)
+            .collect::<Vec<_>>()
+    }
+    fn count_neighbors(&mut self) {
+        for x in 0..INSTANCES_PER_ROW {
+            for y in 0..INSTANCES_PER_ROW {
+                for z in 0..INSTANCES_PER_ROW {
+                    let one_idx = three_to_one(x, y, z);
+                    self.cells[one_idx].neighbors = 0;
+                    for offset in NEIGHBOR_OFFSETS.iter() {
+                        if valid_idx(x, y, z, *offset) {
+                            if self.cells[three_to_one(
+                                (x as i32 + offset.0) as u32,
+                                (y as i32 + offset.1) as u32,
+                                (z as i32 + offset.2) as u32,
+                            )]
+                            .get_alive()
+                            {
+                                self.cells[one_idx].neighbors += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    fn sync_cells(&mut self) {
+        for cell in self.cells.iter_mut() {
+            cell.sync();
+        }
     }
 }
 
@@ -789,49 +904,47 @@ pub async fn run() {
 
     let mut state = State::new(&window).await;
 
-    event_loop.run(move |event, _, control_flow| {
-        match event {
-            Event::WindowEvent {
-                ref event,
-                window_id,
-            } if window_id == window.id() => {
-                if !state.input(event) {
-                    match event {
-                        WindowEvent::CloseRequested
-                        | WindowEvent::KeyboardInput {
-                            input:
-                                KeyboardInput {
-                                    state: ElementState::Pressed,
-                                    virtual_keycode: Some(VirtualKeyCode::Escape),
-                                    ..
-                                },
-                            ..
-                        } => *control_flow = ControlFlow::Exit,
-                        WindowEvent::Resized(physical_size) => {
-                            state.resize(*physical_size);
-                        }
-                        WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
-                            state.resize(**new_inner_size);
-                        }
-                        _ => {}
+    event_loop.run(move |event, _, control_flow| match event {
+        Event::WindowEvent {
+            ref event,
+            window_id,
+        } if window_id == window.id() => {
+            if !state.input(event) {
+                match event {
+                    WindowEvent::CloseRequested
+                    | WindowEvent::KeyboardInput {
+                        input:
+                            KeyboardInput {
+                                state: ElementState::Pressed,
+                                virtual_keycode: Some(VirtualKeyCode::Escape),
+                                ..
+                            },
+                        ..
+                    } => *control_flow = ControlFlow::Exit,
+                    WindowEvent::Resized(physical_size) => {
+                        state.resize(*physical_size);
                     }
+                    WindowEvent::ScaleFactorChanged { new_inner_size, .. } => {
+                        state.resize(**new_inner_size);
+                    }
+                    _ => {}
                 }
             }
-            Event::RedrawRequested(window_id) if window_id == window.id() => {
-                state.update();
-                match state.render() {
-                    Ok(_) => {}
-                    Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
-                        state.resize(state.size)
-                    }
-                    Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
-                    Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
-                }
-            }
-            Event::RedrawEventsCleared => {
-                window.request_redraw();
-            }
-            _ => {}
         }
+        Event::RedrawRequested(window_id) if window_id == window.id() => {
+            state.update();
+            match state.render() {
+                Ok(_) => {}
+                Err(wgpu::SurfaceError::Lost | wgpu::SurfaceError::Outdated) => {
+                    state.resize(state.size)
+                }
+                Err(wgpu::SurfaceError::OutOfMemory) => *control_flow = ControlFlow::Exit,
+                Err(wgpu::SurfaceError::Timeout) => log::warn!("Surface timeout"),
+            }
+        }
+        Event::RedrawEventsCleared => {
+            window.request_redraw();
+        }
+        _ => {}
     });
 }
