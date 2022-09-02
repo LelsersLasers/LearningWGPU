@@ -660,10 +660,23 @@ impl State {
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
             WindowEvent::CursorMoved { position, .. } => {
+                let diagonal_dist = (self.size.width as f64 * self.size.width as f64
+                    + self.size.height as f64 * self.size.height as f64)
+                    .sqrt();
+                let dist_top_left = (position.x * position.x + position.y * position.y).sqrt();
+                let dist_top_right = ((position.x - self.size.width as f64)
+                    * (position.x - self.size.width as f64)
+                    + position.y * position.y)
+                    .sqrt();
+                let dist_bottom_left = (position.x * position.x
+                    + (position.y - self.size.height as f64)
+                        * (position.y - self.size.height as f64))
+                    .sqrt();
+
                 self.clear_color = wgpu::Color {
-                    r: position.x / self.size.width as f64,
-                    g: position.y / self.size.height as f64,
-                    b: 1. - (position.x / self.size.width as f64),
+                    r: dist_top_left / diagonal_dist,
+                    g: dist_top_right / diagonal_dist,
+                    b: dist_bottom_left / diagonal_dist,
                     a: 1.0,
                 };
             }
@@ -675,14 +688,12 @@ impl State {
                         ..
                     },
                 ..
-            } => {
-                match keycode {
-                    VirtualKeyCode::R => {
-                        self.cells = Self::create_cells();
-                    }
-                    _ => {}
+            } => match keycode {
+                VirtualKeyCode::R => {
+                    self.cells = Self::create_cells();
                 }
-            }
+                _ => {}
+            },
             _ => {}
         }
         self.camera_staging.camera.process_events(event)
@@ -845,7 +856,8 @@ pub async fn run() {
         .with_inner_size(winit::dpi::PhysicalSize::new(1200, 675))
         .with_title("3d Cellular Automata [WGPU/Rust]")
         .with_resizable(false)
-        .build(&event_loop).unwrap();
+        .build(&event_loop)
+        .unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {
