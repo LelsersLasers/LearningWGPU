@@ -276,12 +276,12 @@ struct Camera {
     znear: f32,
     zfar: f32,
 
-    lat: f32,
-    lon: f32,
-    radius: f32,
+    lat: f64,
+    lon: f64,
+    radius: f64,
 
-    turn_speed: f32,
-    zoom_speed: f32,
+    turn_speed: f64,
+    zoom_speed: f64,
 
     up_down: bool,
     down_down: bool,
@@ -339,39 +339,48 @@ impl Camera {
             _ => false,
         }
     }
-    fn update(&mut self) {
+    fn update(&mut self, delta: f64) {
         if self.up_down {
-            self.lat += self.turn_speed;
+            self.lat += self.turn_speed * delta;
         }
         if self.down_down {
-            self.lat -= self.turn_speed;
+            self.lat -= self.turn_speed * delta;
         }
         if self.left_down {
-            self.lon -= self.turn_speed;
+            self.lon -= self.turn_speed * delta;
         }
         if self.right_down {
-            self.lon += self.turn_speed;
+            self.lon += self.turn_speed * delta;
         }
-        self.clamp_angles();
+        if self.forward_down {
+            self.radius -= self.zoom_speed * delta;
+        }
+        if self.backward_down {
+            self.radius += self.zoom_speed * delta;
+        }
+        self.clamp_pos();
         self.update_eye();
     }
-    fn clamp_angles(&mut self) {
-        if self.lat > std::f32::consts::PI / 2. {
-            self.lat = std::f32::consts::PI / 2. - 0.0001;
-        } else if self.lat < -std::f32::consts::PI / 2. {
-            self.lat = -std::f32::consts::PI / 2. + 0.0001;
+    fn clamp_pos(&mut self) {
+        if self.lat > std::f64::consts::PI / 2. {
+            self.lat = std::f64::consts::PI / 2. - 0.0001;
+        } else if self.lat < -std::f64::consts::PI / 2. {
+            self.lat = -std::f64::consts::PI / 2. + 0.0001;
         }
-        if self.lon > std::f32::consts::PI {
-            self.lon -= 2. * std::f32::consts::PI;
-        } else if self.lon < -std::f32::consts::PI {
-            self.lon += 2. * std::f32::consts::PI;
+        if self.lon > std::f64::consts::PI {
+            self.lon -= 2. * std::f64::consts::PI;
+        } else if self.lon < -std::f64::consts::PI {
+            self.lon += 2. * std::f64::consts::PI;
+        }
+        if self.radius < 5. {
+            self.radius = 5.;
         }
     }
     fn update_eye(&mut self) {
         self.eye = cgmath::Point3::new(
-            self.radius * self.lat.cos() * self.lon.cos(),
-            self.radius * self.lat.cos() * self.lon.sin(),
-            self.radius * self.lat.sin(),
+            (self.radius * self.lat.cos() * self.lon.cos()) as f32,
+            (self.radius * self.lat.cos() * self.lon.sin()) as f32,
+            (self.radius * self.lat.sin()) as f32,
         );
     }
 }
@@ -427,7 +436,8 @@ struct State {
     instance_buffer: wgpu::Buffer,
 
     // diffuse_bind_group: wgpu::BindGroup,
-    last_frame: Option<std::time::Instant>,
+    last_frame: f64,
+    delta: f64,
 
     cells: Vec<Cell>,
 }
@@ -472,19 +482,19 @@ impl State {
         };
         surface.configure(&device, &config);
 
-        let camera = Camera {
-            eye: (0., 75., 75.).into(),
+        let mut camera = Camera {
+            eye: (1., 1., 1.).into(),
             target: (0., 0., 0.).into(),
             up: cgmath::Vector3::unit_z(),
             aspect: size.width as f32 / size.height as f32,
             fovy: 45.,
             znear: 0.01,
             zfar: 300.,
-            lat: 20.,
-            lon: 20.,
-            radius: INSTANCES_PER_ROW as f32 * 1.75,
-            turn_speed: std::f32::consts::PI / 300.,
-            zoom_speed: INSTANCES_PER_ROW as f32 / 10.,
+            lat: 0.35,
+            lon: 0.35,
+            radius: INSTANCES_PER_ROW as f64 * 2.5,
+            turn_speed: std::f64::consts::PI / 4.,
+            zoom_speed: INSTANCES_PER_ROW as f64 / 4.,
             up_down: false,
             down_down: false,
             left_down: false,
@@ -492,6 +502,7 @@ impl State {
             forward_down: false,
             backward_down: false,
         };
+        camera.update_eye();
 
         let mut camera_uniform = CameraUniform::new();
         let camera_staging = CameraStaging::new(camera);
@@ -634,13 +645,8 @@ impl State {
             b: 0.3,
             a: 1.0,
         };
-        let mut last_frame = None;
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "wasm32")] {}
-            else {
-                last_frame = Some(std::time::Instant::now());
-            }
-        };
+        let last_frame = instant::now();
+        let delta = 0.2;
 
         Self {
             surface,
@@ -662,6 +668,7 @@ impl State {
             instance_buffer,
             // diffuse_bind_group,
             last_frame,
+            delta,
             cells,
         }
     }
@@ -699,8 +706,8 @@ impl State {
         self.camera_staging.camera.process_events(event)
     }
     fn update(&mut self) {
-        // self.count_neighbors();
-        // self.sync_cells();
+        self.count_neighbors();
+        self.sync_cells();
 
         let instance_data = self.get_instance_data();
         self.queue.write_buffer(
@@ -709,7 +716,7 @@ impl State {
             bytemuck::cast_slice(&instance_data),
         );
 
-        self.camera_staging.camera.update();
+        self.camera_staging.camera.update(self.delta);
         self.camera_staging.update_camera(&mut self.camera_uniform);
         self.queue.write_buffer(
             &self.camera_buffer,
@@ -759,15 +766,10 @@ impl State {
         self.queue.submit(std::iter::once(encoder.finish()));
         output.present();
 
-        cfg_if::cfg_if! {
-            if #[cfg(target_arch = "wasm32")] {}
-            else {
-                let elapsed_seconds = self.last_frame.unwrap().elapsed().as_secs_f64();
-                let fps = 1. / elapsed_seconds;
-                println!("FPS: {:.0}", fps);
-                self.last_frame = Some(std::time::Instant::now());
-            }
-        }
+        self.delta = (instant::now() - self.last_frame) / 1000.;
+        let fps = 1. / self.delta;
+        println!("FPS: {:.0}", fps);
+        self.last_frame = instant::now();
 
         Ok(())
     }
