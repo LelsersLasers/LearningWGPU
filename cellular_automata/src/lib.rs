@@ -275,73 +275,26 @@ struct Camera {
     fovy: f32,
     znear: f32,
     zfar: f32,
+
     lat: f32,
     lon: f32,
     radius: f32,
+
+    turn_speed: f32,
+    zoom_speed: f32,
+
+    up_down: bool,
+    down_down: bool,
+    left_down: bool,
+    right_down: bool,
+    forward_down: bool,
+    backward_down: bool,
 }
 impl Camera {
     fn build_view_projection_matrix(&self) -> cgmath::Matrix4<f32> {
         let view = cgmath::Matrix4::look_at_rh(self.eye, self.target, self.up);
         let proj = cgmath::perspective(cgmath::Deg(self.fovy), self.aspect, self.znear, self.zfar);
         return proj * view;
-    }
-    fn update_eye(&mut self) {
-        self.eye = cgmath::Point3::new(
-            self.radius * self.lat.cos() * self.lon.cos(),
-            self.radius * self.lat.cos() * self.lon.sin(),
-            self.radius * self.lon.sin(),
-        );
-    }
-}
-
-struct CameraStaging {
-    camera: Camera,
-    rotation: cgmath::Deg<f32>,
-}
-impl CameraStaging {
-    fn new(camera: Camera) -> Self {
-        Self {
-            camera,
-            rotation: cgmath::Deg(0.0),
-        }
-    }
-    fn update_camera(&self, camera_uniform: &mut CameraUniform) {
-        camera_uniform.view_proj = (OPENGL_TO_WGPU_MATRIX
-            * self.camera.build_view_projection_matrix()
-            * cgmath::Matrix4::from_angle_z(self.rotation))
-        .into();
-    }
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct CameraUniform {
-    view_proj: [[f32; 4]; 4],
-}
-impl CameraUniform {
-    fn new() -> Self {
-        Self {
-            view_proj: cgmath::Matrix4::identity().into(),
-        }
-    }
-}
-
-struct CameraController {
-    speed: f32,
-    up_down: bool,
-    down_down: bool,
-    left_down: bool,
-    right_down: bool,
-}
-impl CameraController {
-    fn new(speed: f32) -> Self {
-        Self {
-            speed,
-            up_down: false,
-            down_down: false,
-            left_down: false,
-            right_down: false,
-        }
     }
     fn process_events(&mut self, event: &WindowEvent) -> bool {
         match event {
@@ -372,27 +325,80 @@ impl CameraController {
                         self.right_down = pressed;
                         true
                     }
+                    VirtualKeyCode::Q | VirtualKeyCode::PageUp => {
+                        self.forward_down = pressed;
+                        true
+                    }
+                    VirtualKeyCode::E | VirtualKeyCode::PageDown => {
+                        self.backward_down = pressed;
+                        true
+                    }
                     _ => false,
                 }
             }
             _ => false,
         }
     }
-    fn update_camera(&self, camera: &mut Camera) {
+    fn update(&mut self) {
         if self.up_down {
-            camera.lat += std::f32::consts::PI;
+            self.lat += self.turn_speed;
         }
         if self.down_down {
-            camera.lat -= std::f32::consts::PI;
+            self.lat -= self.turn_speed;
         }
         if self.left_down {
-            camera.lon -= std::f32::consts::PI;
+            self.lon -= self.turn_speed;
         }
         if self.right_down {
-            camera.lon += std::f32::consts::PI;
+            self.lon += self.turn_speed;
         }
+        self.clamp_angles();
+        self.update_eye();
+    }
+    fn clamp_angles(&mut self) {
+        if self.lat > std::f32::consts::PI / 2. {
+            self.lat = std::f32::consts::PI / 2. - 0.0001;
+        } else if self.lat < -std::f32::consts::PI / 2. {
+            self.lat = -std::f32::consts::PI / 2. + 0.0001;
+        }
+        if self.lon > std::f32::consts::PI {
+            self.lon -= 2. * std::f32::consts::PI;
+        } else if self.lon < -std::f32::consts::PI {
+            self.lon += 2. * std::f32::consts::PI;
+        }
+    }
+    fn update_eye(&mut self) {
+        self.eye = cgmath::Point3::new(
+            self.radius * self.lat.cos() * self.lon.cos(),
+            self.radius * self.lat.cos() * self.lon.sin(),
+            self.radius * self.lat.sin(),
+        );
+    }
+}
 
-        camera.update_eye();
+struct CameraStaging {
+    camera: Camera,
+}
+impl CameraStaging {
+    fn new(camera: Camera) -> Self {
+        Self { camera }
+    }
+    fn update_camera(&self, camera_uniform: &mut CameraUniform) {
+        camera_uniform.view_proj =
+            (OPENGL_TO_WGPU_MATRIX * self.camera.build_view_projection_matrix()).into();
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+struct CameraUniform {
+    view_proj: [[f32; 4]; 4],
+}
+impl CameraUniform {
+    fn new() -> Self {
+        Self {
+            view_proj: cgmath::Matrix4::identity().into(),
+        }
     }
 }
 
@@ -404,7 +410,6 @@ struct State {
     size: winit::dpi::PhysicalSize<u32>,
 
     camera_staging: CameraStaging,
-    camera_controller: CameraController,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
@@ -470,7 +475,7 @@ impl State {
         let camera = Camera {
             eye: (0., 75., 75.).into(),
             target: (0., 0., 0.).into(),
-            up: cgmath::Vector3::unit_y(),
+            up: cgmath::Vector3::unit_z(),
             aspect: size.width as f32 / size.height as f32,
             fovy: 45.,
             znear: 0.01,
@@ -478,8 +483,15 @@ impl State {
             lat: 20.,
             lon: 20.,
             radius: INSTANCES_PER_ROW as f32 * 1.75,
+            turn_speed: std::f32::consts::PI / 300.,
+            zoom_speed: INSTANCES_PER_ROW as f32 / 10.,
+            up_down: false,
+            down_down: false,
+            left_down: false,
+            right_down: false,
+            forward_down: false,
+            backward_down: false,
         };
-        let camera_controller = CameraController::new(0.2);
 
         let mut camera_uniform = CameraUniform::new();
         let camera_staging = CameraStaging::new(camera);
@@ -637,7 +649,6 @@ impl State {
             config,
             size,
             camera_staging,
-            camera_controller,
             camera_uniform,
             camera_buffer,
             camera_bind_group,
@@ -685,11 +696,11 @@ impl State {
             // } => self.space_down = *state == ElementState::Pressed,
             _ => {}
         }
-        self.camera_controller.process_events(event)
+        self.camera_staging.camera.process_events(event)
     }
     fn update(&mut self) {
-        self.count_neighbors();
-        self.sync_cells();
+        // self.count_neighbors();
+        // self.sync_cells();
 
         let instance_data = self.get_instance_data();
         self.queue.write_buffer(
@@ -698,8 +709,7 @@ impl State {
             bytemuck::cast_slice(&instance_data),
         );
 
-        self.camera_controller
-            .update_camera(&mut self.camera_staging.camera);
+        self.camera_staging.camera.update();
         self.camera_staging.update_camera(&mut self.camera_uniform);
         self.queue.write_buffer(
             &self.camera_buffer,
