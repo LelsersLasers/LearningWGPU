@@ -49,10 +49,14 @@ impl Cell {
     }
     fn get_color(&self) -> [f32; 3] {
         if self.hp == STATE as i32 {
-            [0.9, 0., 0.]
+            ALIVE_COLOR
         } else {
-            let intensity = (1. + self.hp as f32) / (STATE as f32 + 2.);
-            [intensity, intensity, intensity]
+            let intensity = (1. + self.hp as f32) / (STATE as f32);
+            [
+                rgb_to_srgb(intensity * (DYING_COLOR[0] - DEAD_COLOR[0]) as f32 + DEAD_COLOR[0] as f32),
+                rgb_to_srgb(intensity * (DYING_COLOR[1] - DEAD_COLOR[1]) as f32 + DEAD_COLOR[1] as f32),
+                rgb_to_srgb(intensity * (DYING_COLOR[2] - DEAD_COLOR[2]) as f32 + DEAD_COLOR[2] as f32),
+            ]
         }
     }
     fn create_instance(&self) -> Instance {
@@ -203,11 +207,11 @@ const INDICES: &[u16] = &[
     12, 13, 14, 12, 14, 15,
 ];
 
-const INSTANCES_PER_ROW: u32 = 100;
+const CELL_BOUNDS: u32 = 96;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
-    INSTANCES_PER_ROW as f32 * 0.5,
-    INSTANCES_PER_ROW as f32 * 0.5,
-    INSTANCES_PER_ROW as f32 * 0.5,
+    CELL_BOUNDS as f32 * 0.5,
+    CELL_BOUNDS as f32 * 0.5,
+    CELL_BOUNDS as f32 * 0.5,
 );
 
 pub const OPENGL_TO_WGPU_MATRIX: cgmath::Matrix4<f32> = cgmath::Matrix4::new(
@@ -224,6 +228,15 @@ const SPAWN: [bool; 27] = [
     false, false, false, false, false, false, false, false, false, false, false, false, false,
 ];
 const ALIVE_CHANCE_ON_START: f32 = 0.15;
+const CLEAR_COLOR: wgpu::Color = wgpu::Color {
+    r: 0.023104,
+    g: 0.030257,
+    b: 0.047776,
+    a: 1.
+};
+const ALIVE_COLOR: [f32; 3] = [0.529523, 0.119264, 0.144972];
+const DEAD_COLOR: [u8; 3] = [76, 86, 106];
+const DYING_COLOR: [u8; 3] = [236, 239, 244];
 const NEIGHBOR_OFFSETS: [(i32, i32, i32); 26] = [
     (1, 0, 0),
     (-1, 0, 0),
@@ -255,16 +268,19 @@ const NEIGHBOR_OFFSETS: [(i32, i32, i32); 26] = [
 
 fn three_to_one(x: u32, y: u32, z: u32) -> usize {
     z as usize
-        + y as usize * INSTANCES_PER_ROW as usize
-        + x as usize * INSTANCES_PER_ROW as usize * INSTANCES_PER_ROW as usize
+        + y as usize * CELL_BOUNDS as usize
+        + x as usize * CELL_BOUNDS as usize * CELL_BOUNDS as usize
 }
 fn valid_idx(x: u32, y: u32, z: u32, offset: (i32, i32, i32)) -> bool {
     x as i32 + offset.0 >= 0
-        && x as i32 + offset.0 < INSTANCES_PER_ROW as i32
+        && x as i32 + offset.0 < CELL_BOUNDS as i32
         && y as i32 + offset.1 >= 0
-        && y as i32 + offset.1 < INSTANCES_PER_ROW as i32
+        && y as i32 + offset.1 < CELL_BOUNDS as i32
         && z as i32 + offset.2 >= 0
-        && z as i32 + offset.2 < INSTANCES_PER_ROW as i32
+        && z as i32 + offset.2 < CELL_BOUNDS as i32
+}
+fn rgb_to_srgb(rgb: f32) -> f32 {
+    (rgb as f32 / 255.).powf(2.2)
 }
 
 struct Camera {
@@ -423,8 +439,6 @@ struct State {
     camera_buffer: wgpu::Buffer,
     camera_bind_group: wgpu::BindGroup,
 
-    clear_color: wgpu::Color,
-
     depth_texture: texture::Texture,
     render_pipeline: wgpu::RenderPipeline,
 
@@ -492,9 +506,9 @@ impl State {
             zfar: 300.,
             lat: 0.35,
             lon: 0.35,
-            radius: INSTANCES_PER_ROW as f64 * 2.5,
+            radius: CELL_BOUNDS as f64 * 2.5,
             turn_speed: std::f64::consts::PI / 4.,
-            zoom_speed: INSTANCES_PER_ROW as f64 / 4.,
+            zoom_speed: CELL_BOUNDS as f64 / 4.,
             up_down: false,
             down_down: false,
             left_down: false,
@@ -615,12 +629,7 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        let clear_color = wgpu::Color {
-            r: 0.1,
-            g: 0.2,
-            b: 0.3,
-            a: 1.0,
-        };
+        
         let last_frame = instant::now();
         let delta = 0.2;
 
@@ -634,7 +643,6 @@ impl State {
             camera_uniform,
             camera_buffer,
             camera_bind_group,
-            clear_color,
             depth_texture,
             render_pipeline,
             vertex_buffer,
@@ -659,27 +667,6 @@ impl State {
     }
     fn input(&mut self, event: &WindowEvent) -> bool {
         match event {
-            WindowEvent::CursorMoved { position, .. } => {
-                let diagonal_dist = (self.size.width as f64 * self.size.width as f64
-                    + self.size.height as f64 * self.size.height as f64)
-                    .sqrt();
-                let dist_top_left = (position.x * position.x + position.y * position.y).sqrt();
-                let dist_top_right = ((position.x - self.size.width as f64)
-                    * (position.x - self.size.width as f64)
-                    + position.y * position.y)
-                    .sqrt();
-                let dist_bottom_left = (position.x * position.x
-                    + (position.y - self.size.height as f64)
-                        * (position.y - self.size.height as f64))
-                    .sqrt();
-
-                self.clear_color = wgpu::Color {
-                    r: dist_top_left / diagonal_dist,
-                    g: dist_top_right / diagonal_dist,
-                    b: dist_bottom_left / diagonal_dist,
-                    a: 1.0,
-                };
-            }
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
@@ -735,7 +722,7 @@ impl State {
                     view: &view,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
+                        load: wgpu::LoadOp::Clear(CLEAR_COLOR),
                         store: true,
                     },
                 })],
@@ -760,8 +747,8 @@ impl State {
         output.present();
 
         self.delta = (instant::now() - self.last_frame) / 1000.;
-        // let fps = 1. / self.delta;
-        // println!("FPS: {:.0}", fps);
+        let fps = 1. / self.delta;
+        println!("FPS: {:.0}", fps);
         self.last_frame = instant::now();
 
         Ok(())
@@ -783,9 +770,9 @@ impl State {
     fn create_cells() -> Vec<Cell> {
         let mut rng = rand::thread_rng();
         let mut cells = Vec::new();
-        for x in 0..INSTANCES_PER_ROW {
-            for y in 0..INSTANCES_PER_ROW {
-                for z in 0..INSTANCES_PER_ROW {
+        for x in 0..CELL_BOUNDS {
+            for y in 0..CELL_BOUNDS {
+                for z in 0..CELL_BOUNDS {
                     let mut cell = Cell::new(
                         cgmath::Vector3 {
                             x: x as f32,
@@ -794,12 +781,12 @@ impl State {
                         } - INSTANCE_DISPLACEMENT,
                         -1,
                     );
-                    if x >= INSTANCES_PER_ROW / 3
-                        && x <= INSTANCES_PER_ROW * 2 / 3
-                        && y >= INSTANCES_PER_ROW / 3
-                        && y <= INSTANCES_PER_ROW * 2 / 3
-                        && z >= INSTANCES_PER_ROW / 3
-                        && z <= INSTANCES_PER_ROW * 2 / 3
+                    if x >= CELL_BOUNDS / 3
+                        && x <= CELL_BOUNDS * 2 / 3
+                        && y >= CELL_BOUNDS / 3
+                        && y <= CELL_BOUNDS * 2 / 3
+                        && z >= CELL_BOUNDS / 3
+                        && z <= CELL_BOUNDS * 2 / 3
                         && ALIVE_CHANCE_ON_START < rng.gen()
                     {
                         cell.hp = STATE as i32;
@@ -811,9 +798,9 @@ impl State {
         return cells;
     }
     fn count_neighbors(&mut self) {
-        for x in 0..INSTANCES_PER_ROW {
-            for y in 0..INSTANCES_PER_ROW {
-                for z in 0..INSTANCES_PER_ROW {
+        for x in 0..CELL_BOUNDS {
+            for y in 0..CELL_BOUNDS {
+                for z in 0..CELL_BOUNDS {
                     let one_idx = three_to_one(x, y, z);
                     self.cells[one_idx].neighbors = 0;
                     for offset in NEIGHBOR_OFFSETS.iter() {
