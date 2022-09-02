@@ -203,7 +203,7 @@ const INDICES: &[u16] = &[
     12, 13, 14, 12, 14, 15,
 ];
 
-const INSTANCES_PER_ROW: u32 = 50;
+const INSTANCES_PER_ROW: u32 = 100;
 const INSTANCE_DISPLACEMENT: cgmath::Vector3<f32> = cgmath::Vector3::new(
     INSTANCES_PER_ROW as f32 * 0.5,
     INSTANCES_PER_ROW as f32 * 0.5,
@@ -603,34 +603,10 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
-        let mut rng = rand::thread_rng();
         let mut instances: Vec<Instance> = Vec::new();
-        let mut cells: Vec<Cell> = Vec::new();
-        for x in 0..INSTANCES_PER_ROW {
-            for y in 0..INSTANCES_PER_ROW {
-                for z in 0..INSTANCES_PER_ROW {
-                    let mut cell = Cell::new(
-                        cgmath::Vector3 {
-                            x: x as f32,
-                            y: y as f32,
-                            z: z as f32,
-                        } - INSTANCE_DISPLACEMENT,
-                        -1,
-                    );
-                    if x >= INSTANCES_PER_ROW / 3
-                        && x <= INSTANCES_PER_ROW * 2 / 3
-                        && y >= INSTANCES_PER_ROW / 3
-                        && y <= INSTANCES_PER_ROW * 2 / 3
-                        && z >= INSTANCES_PER_ROW / 3
-                        && z <= INSTANCES_PER_ROW * 2 / 3
-                        && ALIVE_CHANCE_ON_START < rng.gen()
-                    {
-                        cell.hp = STATE as i32;
-                    }
-                    cells.push(cell);
-                    instances.push(cell.create_instance());
-                }
-            }
+        let cells: Vec<Cell> = Self::create_cells();
+        for cell in cells.iter() {
+            instances.push(cell.create_instance());
         }
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -666,7 +642,6 @@ impl State {
             num_indices,
             instances,
             instance_buffer,
-            // diffuse_bind_group,
             last_frame,
             delta,
             cells,
@@ -692,15 +667,22 @@ impl State {
                     a: 1.0,
                 };
             }
-            // WindowEvent::KeyboardInput {
-            //     input:
-            //         KeyboardInput {
-            //             state,
-            //             virtual_keycode: Some(VirtualKeyCode::Space),
-            //             ..
-            //         },
-            //     ..
-            // } => self.space_down = *state == ElementState::Pressed,
+            WindowEvent::KeyboardInput {
+                input:
+                    KeyboardInput {
+                        state: ElementState::Pressed,
+                        virtual_keycode: Some(keycode),
+                        ..
+                    },
+                ..
+            } => {
+                match keycode {
+                    VirtualKeyCode::R => {
+                        self.cells = Self::create_cells();
+                    }
+                    _ => {}
+                }
+            }
             _ => {}
         }
         self.camera_staging.camera.process_events(event)
@@ -767,8 +749,8 @@ impl State {
         output.present();
 
         self.delta = (instant::now() - self.last_frame) / 1000.;
-        let fps = 1. / self.delta;
-        println!("FPS: {:.0}", fps);
+        // let fps = 1. / self.delta;
+        // println!("FPS: {:.0}", fps);
         self.last_frame = instant::now();
 
         Ok(())
@@ -781,15 +763,41 @@ impl State {
                 self.instances.push(cell.create_instance());
             }
         }
-        // for _i in self.instances.len()..self.cells.len() {
-        //     self.instances.push(Instance {
-        //         position: cgmath::Vector3 { x: , y: (), z: () }
-        //     });
-        // }
+
         self.instances
             .iter()
             .map(Instance::to_raw)
             .collect::<Vec<_>>()
+    }
+    fn create_cells() -> Vec<Cell> {
+        let mut rng = rand::thread_rng();
+        let mut cells = Vec::new();
+        for x in 0..INSTANCES_PER_ROW {
+            for y in 0..INSTANCES_PER_ROW {
+                for z in 0..INSTANCES_PER_ROW {
+                    let mut cell = Cell::new(
+                        cgmath::Vector3 {
+                            x: x as f32,
+                            y: y as f32,
+                            z: z as f32,
+                        } - INSTANCE_DISPLACEMENT,
+                        -1,
+                    );
+                    if x >= INSTANCES_PER_ROW / 3
+                        && x <= INSTANCES_PER_ROW * 2 / 3
+                        && y >= INSTANCES_PER_ROW / 3
+                        && y <= INSTANCES_PER_ROW * 2 / 3
+                        && z >= INSTANCES_PER_ROW / 3
+                        && z <= INSTANCES_PER_ROW * 2 / 3
+                        && ALIVE_CHANCE_ON_START < rng.gen()
+                    {
+                        cell.hp = STATE as i32;
+                    }
+                    cells.push(cell);
+                }
+            }
+        }
+        return cells;
     }
     fn count_neighbors(&mut self) {
         for x in 0..INSTANCES_PER_ROW {
@@ -833,12 +841,17 @@ pub async fn run() {
     }
 
     let event_loop = EventLoop::new();
-    let window = WindowBuilder::new().build(&event_loop).unwrap();
+    let window = WindowBuilder::new()
+        .with_inner_size(winit::dpi::PhysicalSize::new(1200, 675))
+        .with_title("3d Cellular Automata [WGPU/Rust]")
+        .with_resizable(false)
+        .build(&event_loop).unwrap();
 
     #[cfg(target_arch = "wasm32")]
     {
         use winit::dpi::PhysicalSize;
-        window.set_inner_size(PhysicalSize::new(450, 450));
+
+        window.set_inner_size(PhysicalSize::new(1200, 675));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
