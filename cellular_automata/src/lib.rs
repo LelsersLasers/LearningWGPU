@@ -446,7 +446,7 @@ struct State {
     index_buffer: wgpu::Buffer,
     num_indices: u32,
 
-    instances: Vec<Instance>,
+    instance_data: Vec<InstanceRaw>,
     instance_buffer: wgpu::Buffer,
 
     // diffuse_bind_group: wgpu::BindGroup,
@@ -617,10 +617,10 @@ impl State {
         });
         let num_indices = INDICES.len() as u32;
 
-        let mut instances: Vec<Instance> = Vec::new();
+        let mut instance_data: Vec<InstanceRaw> = Vec::new();
         let cells: Vec<Cell> = Self::create_cells();
         for cell in cells.iter() {
-            instances.push(cell.create_instance());
+            instance_data.push(cell.create_instance().to_raw());
         }
         let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -648,7 +648,7 @@ impl State {
             vertex_buffer,
             index_buffer,
             num_indices,
-            instances,
+            instance_data,
             instance_buffer,
             last_frame,
             delta,
@@ -689,11 +689,11 @@ impl State {
         self.count_neighbors();
         self.sync_cells();
 
-        let instance_data = self.get_instance_data();
+        self.calc_instance_data();
         self.queue.write_buffer(
             &self.instance_buffer,
             0,
-            bytemuck::cast_slice(&instance_data),
+            bytemuck::cast_slice(&self.instance_data),
         );
 
         self.camera_staging.camera.update(self.delta);
@@ -740,7 +740,7 @@ impl State {
             render_pass.set_vertex_buffer(0, self.vertex_buffer.slice(..));
             render_pass.set_vertex_buffer(1, self.instance_buffer.slice(..));
             render_pass.set_index_buffer(self.index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instances.len() as u32)
+            render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instance_data.len() as u32)
         }
 
         self.queue.submit(std::iter::once(encoder.finish()));
@@ -754,18 +754,13 @@ impl State {
         Ok(())
     }
 
-    fn get_instance_data(&mut self) -> Vec<InstanceRaw> {
-        self.instances.clear();
+    fn calc_instance_data(&mut self) {
+        self.instance_data.clear();
         for cell in self.cells.iter() {
             if cell.should_draw() {
-                self.instances.push(cell.create_instance());
+                self.instance_data.push(cell.create_instance().to_raw());
             }
         }
-
-        self.instances
-            .iter()
-            .map(Instance::to_raw)
-            .collect::<Vec<_>>()
     }
     fn create_cells() -> Vec<Cell> {
         let mut rng = rand::thread_rng();
