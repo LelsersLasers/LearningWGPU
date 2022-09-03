@@ -449,9 +449,11 @@ struct State {
     instance_data: Vec<InstanceRaw>,
     instance_buffer: wgpu::Buffer,
 
-    // diffuse_bind_group: wgpu::BindGroup,
     last_frame: f64,
     delta: f64,
+
+    pause_tk: bool,
+    paused: bool,
 
     cells: Vec<Cell>,
 }
@@ -622,16 +624,17 @@ impl State {
         for cell in cells.iter() {
             instance_data.push(cell.create_instance().to_raw());
         }
-        let instance_data = instances.iter().map(Instance::to_raw).collect::<Vec<_>>();
         let instance_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Instance Buffer"),
             contents: bytemuck::cast_slice(&instance_data),
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
-        
         let last_frame = instant::now();
         let delta = 0.2;
+
+        let pause_tk = false;
+        let paused = false;
 
         Self {
             surface,
@@ -652,6 +655,8 @@ impl State {
             instance_buffer,
             last_frame,
             delta,
+            pause_tk,
+            paused,
             cells,
         }
     }
@@ -670,24 +675,50 @@ impl State {
             WindowEvent::KeyboardInput {
                 input:
                     KeyboardInput {
-                        state: ElementState::Pressed,
+                        state,
                         virtual_keycode: Some(keycode),
                         ..
                     },
                 ..
-            } => match keycode {
-                VirtualKeyCode::R => {
-                    self.cells = Self::create_cells();
+            } => {
+                let pressed = *state == ElementState::Pressed;
+                match keycode {
+                    VirtualKeyCode::R => {
+                        if pressed {
+                            self.cells = Self::create_cells();
+                        }
+                    }
+                    VirtualKeyCode::Space => {
+                        if pressed {
+                            self.camera_staging.camera.lat = 0.35;
+                            self.camera_staging.camera.lon = 0.35;
+                            self.camera_staging.camera.radius = CELL_BOUNDS as f64 * 2.5;
+                            self.camera_staging.camera.update_eye();
+                        }
+                        
+                    }
+                    VirtualKeyCode::P => {
+                        if pressed {
+                            if !self.pause_tk {
+                                self.paused = !self.paused;
+                            }
+                            self.pause_tk = true;
+                        } else {
+                            self.pause_tk = false;
+                        }
+                    }
+                    _ => {}
                 }
-                _ => {}
-            },
+            }
             _ => {}
         }
         self.camera_staging.camera.process_events(event)
     }
     fn update(&mut self) {
-        self.count_neighbors();
-        self.sync_cells();
+        if !self.paused {
+            self.count_neighbors();
+            self.sync_cells();
+        }
 
         self.calc_instance_data();
         self.queue.write_buffer(
@@ -837,7 +868,7 @@ pub async fn run() {
     let window = WindowBuilder::new()
         .with_inner_size(winit::dpi::PhysicalSize::new(1200, 675))
         .with_title("3d Cellular Automata [WGPU/Rust]")
-        .with_resizable(false)
+        .with_resizable(true)
         .build(&event_loop)
         .unwrap();
 
@@ -845,7 +876,7 @@ pub async fn run() {
     {
         use winit::dpi::PhysicalSize;
 
-        window.set_inner_size(PhysicalSize::new(1200, 675));
+        window.set_inner_size(PhysicalSize::new(800, 450));
 
         use winit::platform::web::WindowExtWebSys;
         web_sys::window()
