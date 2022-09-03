@@ -1,9 +1,12 @@
 {
     "folders": [
-		{
-			"path": "."
-		}
-	],
+        {
+            "path": "."
+        },
+        {
+            "path": "../3D-Cellular-Automata-WGPU"
+        }
+    ],
     "settings": {
         "files.associations": {
             "time.h": "c",
