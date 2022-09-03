@@ -53,9 +53,15 @@ impl Cell {
         } else {
             let intensity = (1. + self.hp as f32) / (STATE as f32);
             [
-                rgb_to_srgb(intensity * (DYING_COLOR[0] - DEAD_COLOR[0]) as f32 + DEAD_COLOR[0] as f32),
-                rgb_to_srgb(intensity * (DYING_COLOR[1] - DEAD_COLOR[1]) as f32 + DEAD_COLOR[1] as f32),
-                rgb_to_srgb(intensity * (DYING_COLOR[2] - DEAD_COLOR[2]) as f32 + DEAD_COLOR[2] as f32),
+                rgb_to_srgb(
+                    intensity * (DYING_COLOR[0] - DEAD_COLOR[0]) as f32 + DEAD_COLOR[0] as f32,
+                ),
+                rgb_to_srgb(
+                    intensity * (DYING_COLOR[1] - DEAD_COLOR[1]) as f32 + DEAD_COLOR[1] as f32,
+                ),
+                rgb_to_srgb(
+                    intensity * (DYING_COLOR[2] - DEAD_COLOR[2]) as f32 + DEAD_COLOR[2] as f32,
+                ),
             ]
         }
     }
@@ -232,11 +238,12 @@ const CLEAR_COLOR: wgpu::Color = wgpu::Color {
     r: 0.023104,
     g: 0.030257,
     b: 0.047776,
-    a: 1.
+    a: 1.,
 };
 const ALIVE_COLOR: [f32; 3] = [0.529523, 0.119264, 0.144972];
 const DEAD_COLOR: [u8; 3] = [76, 86, 106];
-const DYING_COLOR: [u8; 3] = [236, 239, 244];
+const DYING_COLOR: [u8; 3] = [216, 222, 233];
+const TEXT_COLOR: [f32; 4] = [0.84337, 0.867136, 0.907547, 1.];
 const NEIGHBOR_OFFSETS: [(i32, i32, i32); 26] = [
     (1, 0, 0),
     (-1, 0, 0),
@@ -434,6 +441,8 @@ struct State {
     config: wgpu::SurfaceConfiguration,
     size: winit::dpi::PhysicalSize<u32>,
 
+    brush: wgpu_text::TextBrush<wgpu_text::font::FontRef<'static>, glyph_brush::DefaultSectionHasher>,
+
     camera_staging: CameraStaging,
     camera_uniform: CameraUniform,
     camera_buffer: wgpu::Buffer,
@@ -451,6 +460,7 @@ struct State {
 
     last_frame: f64,
     delta: f64,
+    ticks: u64,
 
     pause_tk: bool,
     paused: bool,
@@ -463,15 +473,35 @@ impl State {
 
         let instance = wgpu::Instance::new(wgpu::Backends::all());
         let surface = unsafe { instance.create_surface(window) };
-        // NOTE: could be none, see: https://sotrh.github.io/learn-wgpu/beginner/tutorial2-surface/#state-new
-        let adapter = instance
+
+        println!("Backends list: {:#?}", wgpu::Backends::all());
+        let adapter = match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: Some(&surface),
                 force_fallback_adapter: false,
             })
             .await
-            .unwrap();
+        {
+            Some(adapter) => adapter,
+            None => {
+                cfg_if::cfg_if! {
+                    if #[cfg(target_arch = "wasm32")] {
+                        panic!("No adapter found")
+                    } else {
+                        instance
+                            .enumerate_adapters(wgpu::Backends::all())
+                            .filter(|adapter| surface.get_supported_formats(&adapter).len() > 0)
+                            .next()
+                            .unwrap()
+                    }
+                }
+            }
+        };
+        println!(
+            "Supported texture formats: {:#?}",
+            surface.get_supported_formats(&adapter)
+        );
 
         let (device, queue) = adapter
             .request_device(
@@ -630,8 +660,12 @@ impl State {
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
         });
 
+        let font: &[u8] = include_bytes!("../assets/PixelSquare.ttf");
+        let brush = wgpu_text::BrushBuilder::using_font_bytes(font).unwrap().build(&device, &config);
+
         let last_frame = instant::now();
         let delta = 0.2;
+        let ticks = 0;
 
         let pause_tk = false;
         let paused = false;
@@ -642,6 +676,7 @@ impl State {
             queue,
             config,
             size,
+            brush,
             camera_staging,
             camera_uniform,
             camera_buffer,
@@ -655,6 +690,7 @@ impl State {
             instance_buffer,
             last_frame,
             delta,
+            ticks,
             pause_tk,
             paused,
             cells,
@@ -668,6 +704,7 @@ impl State {
             self.surface.configure(&self.device, &self.config);
             self.depth_texture =
                 texture::Texture::create_depth_texture(&self.device, &self.config, "depth_texture");
+            self.brush.resize_view(self.config.width as f32, self.config.height as f32, &self.queue);
         }
     }
     fn input(&mut self, event: &WindowEvent) -> bool {
@@ -686,6 +723,7 @@ impl State {
                     VirtualKeyCode::R => {
                         if pressed {
                             self.cells = Self::create_cells();
+                            self.ticks = 0;
                         }
                     }
                     VirtualKeyCode::Space => {
@@ -695,7 +733,6 @@ impl State {
                             self.camera_staging.camera.radius = CELL_BOUNDS as f64 * 2.5;
                             self.camera_staging.camera.update_eye();
                         }
-                        
                     }
                     VirtualKeyCode::P => {
                         if pressed {
@@ -718,6 +755,7 @@ impl State {
         if !self.paused {
             self.count_neighbors();
             self.sync_cells();
+            self.ticks += 1;
         }
 
         self.calc_instance_data();
@@ -774,12 +812,22 @@ impl State {
             render_pass.draw_indexed(0..self.num_indices, 0, 0..self.instance_data.len() as u32)
         }
 
-        self.queue.submit(std::iter::once(encoder.finish()));
+        let fps_str =   format!("FPS: {:.0}\n", 1. / self.delta);
+        let ticks_str = format!("Ticks: {}\n", self.ticks);
+
+        let section = glyph_brush::Section::default()
+            .with_screen_position((12., 12.))
+            .add_text(glyph_brush::Text::new(&fps_str[..]).with_color(TEXT_COLOR).with_scale(16.))
+            .add_text(glyph_brush::Text::new(&ticks_str[..]).with_color(TEXT_COLOR).with_scale(16.))
+            .with_layout(glyph_brush::Layout::default_wrap().h_align(glyph_brush::HorizontalAlign::Left));
+        self.brush.queue(&section);
+
+        let text_buffer = self.brush.draw(&self.device, &view, &self.queue);
+
+        self.queue.submit([encoder.finish(), text_buffer]);
         output.present();
 
         self.delta = (instant::now() - self.last_frame) / 1000.;
-        let fps = 1. / self.delta;
-        println!("FPS: {:.0}", fps);
         self.last_frame = instant::now();
 
         Ok(())
